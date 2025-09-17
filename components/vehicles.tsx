@@ -5,6 +5,11 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { bidsService } from "@/lib/services/bids";
+import type { BuyerLimits } from "@/lib/types";
+import { toast } from "sonner";
 import type { VehicleApi, VehicleGroupApi } from "@/lib/types";
 import { buyerApi } from "@/lib/http";
 import { cn, getIstEndMs, ordinal } from "@/lib/utils";
@@ -58,6 +63,11 @@ export function VehicleList({ vehicles }: { vehicles: VehicleApi[] }) {
 }
 
 export function VehicleCard({ v }: { v: VehicleApi }) {
+  const [placeBidOpen, setPlaceBidOpen] = useState(false);
+  const [bidAmount, setBidAmount] = useState<string>("");
+  const [buyerLimits, setBuyerLimits] = useState<BuyerLimits | null>(null);
+  const [limitsLoading, setLimitsLoading] = useState(false);
+  const [placingBid, setPlacingBid] = useState(false);
   const [remaining, setRemaining] = useState<number>(() => {
     const end = v.end_time ? getIstEndMs(v.end_time) : Date.now();
     return Math.max(0, Math.floor((end - Date.now()) / 1000));
@@ -151,7 +161,101 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
             <div className="font-medium">{v.manager_name}</div>
             <div className="text-primary">{v.manager_phone}</div>
           </div>
-          <Button className="mt-1 w-full">View</Button>
+          <div className="mt-1">
+            <Dialog
+              open={placeBidOpen}
+              onOpenChange={(open) => {
+                setPlaceBidOpen(open);
+                if (open) {
+                  const buyerIdStr = typeof window !== "undefined" ? localStorage.getItem("buyer-id") : null;
+                  const buyerId = buyerIdStr ? Number(buyerIdStr) : NaN;
+                  if (!buyerId || Number.isNaN(buyerId)) return;
+                  setLimitsLoading(true);
+                  bidsService
+                    .getBuyerLimits(buyerId)
+                    .then((limits) => setBuyerLimits(limits))
+                    .catch(() => setBuyerLimits(null))
+                    .finally(() => setLimitsLoading(false));
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button className="w-full">Place Bid</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Place Bid</DialogTitle>
+                  <DialogDescription>Enter your bid amount for this vehicle.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Bid Amount</div>
+                    <Input type="number" value={bidAmount} onChange={(e) => setBidAmount(e.target.value)} />
+                  </div>
+                  <div className="rounded-md border p-3 text-xs">
+                    {limitsLoading ? (
+                      <div className="text-muted-foreground">Loading limits...</div>
+                    ) : buyerLimits ? (
+                      <div className="space-y-1">
+                        <div>Security Deposit: {buyerLimits.security_deposit.toLocaleString()}</div>
+                        <div>Bid Limit: {buyerLimits.bid_limit.toLocaleString()}</div>
+                        <div>Limit Used: {buyerLimits.limit_used.toLocaleString()}</div>
+                        <div>Pending Limit: {buyerLimits.pending_limit.toLocaleString()}</div>
+                        {buyerLimits.active_vehicle_bids?.length ? (
+                          <div className="mt-2">
+                            <div className="font-medium text-[11px]">Active Vehicle Bids</div>
+                            {buyerLimits.active_vehicle_bids.map((item) => (
+                              <div key={`avb-${item.vehicle_id}`}>Vehicle #{item.vehicle_id}: Max Bidded {item.max_bidded.toLocaleString()}</div>
+                            ))}
+                          </div>
+                        ) : null}
+                        {buyerLimits.unpaid_vehicles?.length ? (
+                          <div className="mt-2">
+                            <div className="font-medium text-[11px]">Unpaid Vehicles</div>
+                            {buyerLimits.unpaid_vehicles.map((item) => (
+                              <div key={`uv-${item.vehicle_id}`}>Vehicle #{item.vehicle_id}: Unpaid {item.unpaid_amt.toLocaleString()}</div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">Limits unavailable</div>
+                    )}
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    disabled={placingBid}
+                    onClick={async () => {
+                      const buyerIdStr = typeof window !== "undefined" ? localStorage.getItem("buyer-id") : null;
+                      const buyerId = buyerIdStr ? Number(buyerIdStr) : NaN;
+                      if (!buyerId || Number.isNaN(buyerId)) {
+                        toast.error("Buyer not identified");
+                        return;
+                      }
+                      setPlacingBid(true);
+                      try {
+                        await bidsService.placeManualBid({
+                          buyer_id: buyerId,
+                          vehicle_id: Number(v.vehicle_id),
+                          bid_amount: Number(bidAmount || 0),
+                        });
+                        setPlaceBidOpen(false);
+                        toast.success("Bid placed");
+                      } catch (e: any) {
+                        const msg = e?.response?.data?.message || e?.message || "Failed to place bid";
+                        toast.error(msg);
+                      } finally {
+                        setPlacingBid(false);
+                      }
+                    }}
+                  >
+                    {placingBid ? "Placing..." : "Place Bid"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </Card>
     </Link>
@@ -245,7 +349,6 @@ export function GroupsWithFetcher({
           </Card>
         </div>
       ))}
-      {loading ? <Skeleton className="col-span-full h-24 w-full" /> : null}
     </div>
   );
 }

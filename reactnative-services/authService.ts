@@ -94,7 +94,7 @@ export interface UserNameResponse {
   id: number;
   email: string;
   mobile: string;
-  business_vertical: string;
+  business_vertical: 'B' | 'I' | 'A';
   address: string;
   aadhaar_number: string;
   pan_number: string;

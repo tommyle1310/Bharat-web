@@ -41,7 +41,7 @@ export interface UserState {
     id: number;
     email: string;
     mobile: string;
-    business_vertical: string;
+    business_vertical: 'B' | 'I' | 'A';
     address: string;
     aadhaar_number: string;
     pan_number: string;
@@ -62,7 +62,7 @@ export interface UserState {
   // Authentication actions
   logout: () => Promise<void>;
   register: (userData: {
-    businessVertical: string;
+    businessVertical: 'B' | 'I' | 'A';
     username: string;
     email: string;
     avatar?: string;
@@ -101,7 +101,7 @@ export const useUserStore = create<UserState>()(
       ...initialState,
       
       // Profile setters
-      setBusinessVertical: (businessVertical: 'I' | 'B' | 'A') => set({ businessVertical }),
+      setBusinessVertical: (businessVertical: 'B' | 'I' | 'A') => set({ businessVertical }),
       setUsername: (username: string) => set({ username }),
       setEmail: (email: string) => set({ email }),
       setAvatar: (avatar: string) => set({ avatar }),
