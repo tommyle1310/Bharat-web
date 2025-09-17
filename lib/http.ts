@@ -23,6 +23,16 @@ buyerApi.interceptors.request.use((config) => {
 	return config;
 });
 
+authApi.interceptors.request.use((config) => {
+  try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('web-token') : null;
+    if (token) {
+      (config.headers as any).Authorization = `Bearer ${token}`;
+    }
+  } catch {}
+  return config;
+});
+
 buyerApi.interceptors.response.use(
 	(res) => res,
 	async (error) => {

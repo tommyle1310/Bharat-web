@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu, User, Home, Heart, Star, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -21,6 +21,7 @@ const navItems = [
 
 export function Header() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const { username, isAuthenticated, clearAuth } = useUserStore();
   return (
@@ -66,6 +67,28 @@ export function Header() {
                       </Link>
                     );
                   })}
+                  <Separator className="my-2" />
+                  {isAuthenticated ? (
+                    <button
+                      className="w-full text-left block rounded px-3 py-2 text-sm hover:bg-[var(--sidebar-accent)]"
+                      onClick={async () => {
+                        await authService.logout();
+                        clearAuth();
+                        setOpen(false);
+                        router.replace("/login");
+                      }}
+                    >
+                      Logout
+                    </button>
+                  ) : (
+                    <Link
+                      href="/login"
+                      onClick={() => setOpen(false)}
+                      className="block rounded px-3 py-2 text-sm hover:bg-[var(--sidebar-accent)]"
+                    >
+                      Login
+                    </Link>
+                  )}
                 </nav>
               </SheetContent>
             </Sheet>
@@ -103,7 +126,7 @@ export function Header() {
                 <Avatar className="h-8 w-8">
                   <AvatarImage alt="User" />
                   <AvatarFallback>
-                    <User className="h-4 w-4" />
+                    <User className="h-4 w-4 group-hover:text-black" />
                   </AvatarFallback>
                 </Avatar>
                 {username ? <span className="text-sm font-medium max-w-[10rem] truncate">{username}</span> : null}
@@ -118,6 +141,7 @@ export function Header() {
                     onClick={async () => {
                       await authService.logout();
                       clearAuth();
+                      router.replace("/login");
                     }}
                   >
                     Logout

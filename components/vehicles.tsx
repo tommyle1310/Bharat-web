@@ -15,6 +15,8 @@ import { buyerApi } from "@/lib/http";
 import { cn, getIstEndMs, ordinal } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star } from "lucide-react";
+import { useUserStore } from "@/lib/stores/userStore";
+import { watchlistService } from "@/lib/services/watchlist";
 
 export function VehicleGroupGrid({ groups }: { groups: VehicleGroupApi[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -63,11 +65,14 @@ export function VehicleList({ vehicles }: { vehicles: VehicleApi[] }) {
 }
 
 export function VehicleCard({ v }: { v: VehicleApi }) {
+  const { isAuthenticated } = useUserStore();
   const [placeBidOpen, setPlaceBidOpen] = useState(false);
+  const [blockNextNav, setBlockNextNav] = useState(false);
   const [bidAmount, setBidAmount] = useState<string>("");
   const [buyerLimits, setBuyerLimits] = useState<BuyerLimits | null>(null);
   const [limitsLoading, setLimitsLoading] = useState(false);
   const [placingBid, setPlacingBid] = useState(false);
+  const [isFavorite, setIsFavorite] = useState<boolean>(v.is_favorite ?? false);
   const [remaining, setRemaining] = useState<number>(() => {
     const end = v.end_time ? getIstEndMs(v.end_time) : Date.now();
     return Math.max(0, Math.floor((end - Date.now()) / 1000));
@@ -105,10 +110,41 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
   }, [v.owner_serial]);
 
   const imageUrl = `http://13.203.1.159:1310/data-files/vehicles/${v.vehicle_id}/${v.imgIndex}.${v.img_extension || "jpg"}`;
-  const isFavorite = v.is_favorite ?? false;
 
   return (
-    <Link href={`/vehicles/${v.vehicle_id}`}>
+    <div
+      className="cursor-pointer"
+      onClick={(e) => {
+        if (placeBidOpen || blockNextNav) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        if (!isAuthenticated) {
+          e.preventDefault();
+          toast.error("You must be logged in to do this action");
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("auth:login-required"));
+          }
+          return;
+        }
+        // Navigate only when clicking the card (not during dialogs)
+        try {
+          const { push } = require("next/navigation");
+        } catch {}
+        // Fallback: use window.location to avoid Link default behavior issues
+        if (typeof window !== "undefined") {
+          window.location.href = `/vehicles/${v.vehicle_id}`;
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          (e.target as HTMLElement).click();
+        }
+      }}
+    >
       <Card className="overflow-hidden pt-0">
         <div className="relative aspect-video bg-muted">
           <Image
@@ -117,13 +153,41 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
             fill
             className="object-cover"
           />
-          <div className="absolute top-2 right-2">
-            <Star
-              className={cn(
-                "h-5 w-5",
-                isFavorite ? "fill-red-500 text-red-500" : "text-white/80"
-              )}
-            />
+          <div className="absolute top-2 right-2 z-10">
+            <button
+              className="rounded-full bg-white/90 p-1 shadow hover:bg-white"
+              onClick={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!isAuthenticated) {
+                  toast.error("You must be logged in to do this action");
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(new CustomEvent("auth:login-required"));
+                  }
+                  return;
+                }
+                console.log('cehc k any here', v.has_bidded, isFavorite)
+                // Prevent removing from watchlist while bidding
+                if (v.has_bidded === true && isFavorite === true) {
+                  toast.error("You can't remove this from watchlist while bidding it.");
+                  return;
+                }
+                try {
+                  const res = await watchlistService.toggle(Number(v.vehicle_id));
+                  setIsFavorite(Boolean(res.is_favorite));
+                } catch (err: any) {
+                  const msg = err?.response?.data?.message || err?.message || "Failed to toggle watchlist";
+                  toast.error(msg);
+                }
+              }}
+            >
+              <Star
+                className={cn(
+                  "h-5 w-5 text-black",
+                  isFavorite ? "fill-red-500 text-red-500" : ""
+                )}
+              />
+            </button>
           </div>
         </div>
         <div className="p-3 space-y-2">
@@ -131,11 +195,13 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
             <div className="font-semibold">
               {v.make} {v.model} {v.variant} ({v.manufacture_year})
             </div>
-            <Badge
-              variant={v.bidding_status === "Winning" ? "default" : "destructive"}
-            >
-              {v.bidding_status || v.status}
-            </Badge>
+            {v.has_bidded !== false && (
+              <Badge
+                variant={v.bidding_status === "Winning" ? "default" : "destructive"}
+              >
+                {v.bidding_status || v.status}
+              </Badge>
+            )}
           </div>
           <div className="grid grid-cols-4 gap-2">
             {ddhhmmss.map((val, idx) => (
@@ -166,7 +232,22 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
               open={placeBidOpen}
               onOpenChange={(open) => {
                 setPlaceBidOpen(open);
+                if (!open) {
+                  // prevent immediate navigation caused by overlay clicks
+                  setBlockNextNav(true);
+                  setTimeout(() => setBlockNextNav(false), 0);
+                }
                 if (open) {
+                  if (!isAuthenticated) {
+                    toast.error("You must be logged in to do this action");
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(new CustomEvent("auth:login-required"));
+                    }
+                    setPlaceBidOpen(false);
+                    setBlockNextNav(true);
+                    setTimeout(() => setBlockNextNav(false), 0);
+                    return;
+                  }
                   const buyerIdStr = typeof window !== "undefined" ? localStorage.getItem("buyer-id") : null;
                   const buyerId = buyerIdStr ? Number(buyerIdStr) : NaN;
                   if (!buyerId || Number.isNaN(buyerId)) return;
@@ -180,7 +261,26 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
               }}
             >
               <DialogTrigger asChild>
-                <Button className="w-full">Place Bid</Button>
+                <Button
+                  className="w-full"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('cehck what the fuck')
+                    if (!isAuthenticated) {
+                      toast.error("You must be logged in to do this action");
+                      if (typeof window !== "undefined") {
+                        window.dispatchEvent(new CustomEvent("auth:login-required"));
+                      }
+                      return;
+                    }
+                    setPlaceBidOpen(true);
+                  }}
+                  onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                >
+                  Place Bid
+                </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
@@ -226,7 +326,13 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
                 <DialogFooter>
                   <Button
                     disabled={placingBid}
-                    onClick={async () => {
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!isAuthenticated) {
+                        toast.error("You must be logged in to do this action");
+                        return;
+                      }
                       const buyerIdStr = typeof window !== "undefined" ? localStorage.getItem("buyer-id") : null;
                       const buyerId = buyerIdStr ? Number(buyerIdStr) : NaN;
                       if (!buyerId || Number.isNaN(buyerId)) {
@@ -241,6 +347,8 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
                           bid_amount: Number(bidAmount || 0),
                         });
                         setPlaceBidOpen(false);
+                        setBlockNextNav(true);
+                        setTimeout(() => setBlockNextNav(false), 0);
                         toast.success("Bid placed");
                       } catch (e: any) {
                         const msg = e?.response?.data?.message || e?.message || "Failed to place bid";
@@ -258,7 +366,7 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
           </div>
         </div>
       </Card>
-    </Link>
+    </div>
   );
 }
 export function GroupsWithFetcher({
@@ -299,6 +407,10 @@ export function GroupsWithFetcher({
     return undefined;
   };
   useEffect(() => {
+    setGroups(initialGroups);
+  }, [initialGroups]);
+
+  useEffect(() => {
     if (!groups.length) return;
     const g = groups[0];
     setLoading(true);
@@ -323,7 +435,7 @@ export function GroupsWithFetcher({
     }
   };
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {groups.map((g, i) => (
         <div
           key={i}
@@ -332,7 +444,7 @@ export function GroupsWithFetcher({
           style={{ WebkitTapHighlightColor: "transparent" }}
         >
           <Card className="p-2 flex items-center gap-3 flex flex-row items-center justify-between hover:shadow-sm transition-shadow outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 active:ring-0">
-            <div className="h-12 w-16 bg-muted rounded overflow-hidden relative flex-shrink-0">
+            <div className="h-16 w-16 bg-muted rounded overflow-hidden relative flex-shrink-0">
               {(() => {
                 const src = getGroupAsset(g.title) || g.image;
                 return src ? (

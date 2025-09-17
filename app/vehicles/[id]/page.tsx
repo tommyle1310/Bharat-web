@@ -12,13 +12,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { cn, getIstEndMs, ordinal } from "@/lib/utils";
 import { Star, Settings, Hand, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
+import { useUserStore } from "@/lib/stores/userStore";
+import { watchlistService } from "@/lib/services/watchlist";
 
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
+  const { isAuthenticated } = useUserStore();
   const [vehicle, setVehicle] = useState<VehicleApi | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bidHistory, setBidHistory] = useState<BidHistoryItem[] | null>(null);
   const [bidHistoryError, setBidHistoryError] = useState<string | null>(null);
+
+  console.log('check vevhicle', vehicle)
 
   const [autoBidOpen, setAutoBidOpen] = useState(false);
   const [autoBidData, setAutoBidData] = useState<AutoBidData | null>(null);
@@ -28,13 +33,20 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const [formStartAmt, setFormStartAmt] = useState<string>("");
   const [formMaxPrice, setFormMaxPrice] = useState<string>("");
   const [formStepAmt, setFormStepAmt] = useState<string>("");
+  const [placeBidOpen, setPlaceBidOpen] = useState(false);
+  const [bidAmount, setBidAmount] = useState<string>("");
+  const [placingBid, setPlacingBid] = useState(false);
+  const [isFavorite, setIsFavorite] = useState<boolean>(false);
 
   useEffect(() => {
     let mounted = true;
     vehicleService
       .getVehicleById(id)
       .then((v) => {
-        if (mounted) setVehicle(v);
+        if (mounted) {
+          setVehicle(v);
+          setIsFavorite(Boolean((v as any).is_favorite));
+        }
       })
       .catch(() => {
         if (mounted) setError("Unable to load vehicle details.");
@@ -43,7 +55,11 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       mounted = false;
     };
   }, [id]);
-
+  if (typeof window !== "undefined") {
+    try {
+      console.log('cehck bueyr id', localStorage.getItem("buyer-id"));
+    } catch {}
+  }
   // Fetch bid history when buyerId available
   useEffect(() => {
     const buyerIdStr = typeof window !== "undefined" ? localStorage.getItem("buyer-id") : null;
@@ -204,13 +220,35 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             {imageUrl && (
               <Image src={imageUrl} alt={`${vehicle.make} ${vehicle.model}`} fill className="object-cover" />
             )}
-            <div className="absolute top-2 right-2">
-              <Star
-                className={cn(
-                  "h-5 w-5",
-                  (vehicle.is_favorite ?? false) ? "fill-red-500 text-red-500" : "text-white/80"
-                )}
-              />
+            <div className="absolute top-2 right-2 z-10">
+              <button
+                className="rounded-full bg-white/90 p-1 shadow hover:bg-white"
+                onClick={async () => {
+                  if (!isAuthenticated) {
+                    toast.error("You must be logged in to do this action");
+                    return;
+                  }
+                  // Prevent removing from watchlist while bidding
+                  if (vehicle.has_bidded === true && isFavorite === true) {
+                    toast.error("You can't remove this from watchlist while bidding it.");
+                    return;
+                  }
+                  try {
+                    const res = await watchlistService.toggle(Number(vehicle.vehicle_id));
+                    setIsFavorite(Boolean(res.is_favorite));
+                  } catch (err: any) {
+                    const msg = err?.response?.data?.message || err?.message || "Failed to toggle watchlist";
+                    toast.error(msg);
+                  }
+                }}
+              >
+                <Star
+                  className={cn(
+                    "h-5 w-5 text-black",
+                    isFavorite ? "fill-red-500 text-red-500" : ""
+                  )}
+                />
+              </button>
             </div>
           </div>
           <div className="space-y-3">
@@ -218,9 +256,11 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <div className="text-xl font-semibold">
                 {vehicle.make} {vehicle.model} {vehicle.variant} ({vehicle.manufacture_year})
               </div>
-              <Badge variant={vehicle.bidding_status === "Winning" ? "default" : "destructive"}>
-                {vehicle.bidding_status || vehicle.status}
-              </Badge>
+              {vehicle.has_bidded !== false && (
+                <Badge variant={vehicle.bidding_status === "Winning" ? "default" : "destructive"}>
+                  {vehicle.bidding_status || vehicle.status}
+                </Badge>
+              )}
             </div>
 
             <div className="grid grid-cols-4 gap-2">
@@ -241,6 +281,20 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             <div className="text-sm text-muted-foreground">
               {owner} • {vehicle.transmissionType} • Fuel: {vehicle.fuel} • Odo: {vehicle.odometer}
             </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {(vehicle as any).rc_availability !== undefined && (
+                <div>RC Available: <span className="font-medium">{String((vehicle as any).rc_availability)}</span></div>
+              )}
+              {vehicle.regs_no && (
+                <div>Registration No: <span className="font-medium">{vehicle.regs_no}</span></div>
+              )}
+              {vehicle.repo_date && (
+                <div>Repo Date: <span className="font-medium">{vehicle.repo_date}</span></div>
+              )}
+              {vehicle.transmissionType && (
+                <div>Transmission: <span className="font-medium">{vehicle.transmissionType}</span></div>
+              )}
+            </div>
             {/* Yard info */}
             <div className="text-sm space-y-0.5">
               {vehicle.yard_contact_person_name && (
@@ -259,7 +313,62 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <div className="text-primary">{vehicle.manager_phone}</div>
             </div>
             <div className="grid grid-cols-2 gap-2 mt-1">
-              <Button className="w-full">Place Bid</Button>
+              <Dialog open={placeBidOpen} onOpenChange={setPlaceBidOpen}>
+                <DialogTrigger asChild>
+                  <Button className="w-full">Place Bid</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Place Bid</DialogTitle>
+                    <DialogDescription>Enter your bid amount for this vehicle.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Bid Amount</div>
+                      <Input type="number" value={bidAmount} onChange={(e) => setBidAmount(e.target.value)} />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      disabled={placingBid}
+                      onClick={async () => {
+                        const buyerIdStr = typeof window !== "undefined" ? localStorage.getItem("buyer-id") : null;
+                        const buyerId = buyerIdStr ? Number(buyerIdStr) : NaN;
+                        if (!buyerId || Number.isNaN(buyerId)) {
+                          toast.error("Buyer not identified");
+                          return;
+                        }
+                        setPlacingBid(true);
+                        try {
+                          await bidsService.placeManualBid({
+                            buyer_id: buyerId,
+                            vehicle_id: Number(vehicle.vehicle_id),
+                            bid_amount: Number(bidAmount || 0),
+                          });
+                          setPlaceBidOpen(false);
+                          toast.success("Bid placed");
+                          // Force refresh vehicle details & bid history
+                          try {
+                            const [freshVehicle, freshHistory] = await Promise.all([
+                              vehicleService.getVehicleById(id),
+                              bidsService.getHistoryByVehicle(buyerId, Number(vehicle.vehicle_id)),
+                            ]);
+                            setVehicle(freshVehicle);
+                            setBidHistory(freshHistory);
+                          } catch {}
+                        } catch (e: any) {
+                          const msg = e?.response?.data?.message || e?.message || "Failed to place bid";
+                          toast.error(msg);
+                        } finally {
+                          setPlacingBid(false);
+                        }
+                      }}
+                    >
+                      {placingBid ? "Placing..." : "Place Bid"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
               <Dialog open={autoBidOpen} onOpenChange={onOpenAutoBid}>
                 <DialogTrigger asChild>
                   <Button variant="secondary" className="w-full">Auto Bid</Button>

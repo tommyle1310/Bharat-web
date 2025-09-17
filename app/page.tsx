@@ -9,8 +9,11 @@ import { Button } from "@/components/ui/button";
 import { authService } from "@/lib/services/auth";
 import { useUserStore } from "@/lib/stores/userStore";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+  const router = useRouter();
   const [groups, setGroups] = useState<VehicleGroupApi[]>([]);
   const [vehicles, setVehicles] = useState<VehicleApi[]>([]);
   const [phone, setPhone] = useState("");
@@ -18,7 +21,8 @@ export default function Home() {
   const [showPassword, setShowPassword] = useState(false);
   const [nameLoading, setNameLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
-  const { businessVertical, setUserProfile, setAuthTokens, username } = useUserStore();
+  const { businessVertical, setUserProfile, setAuthTokens, username, isAuthenticated } = useUserStore();
+  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
 
   const loadGroups = useCallback(async (bv: "I" | "B") => {
     try {
@@ -37,6 +41,26 @@ export default function Home() {
       loadGroups(businessVertical);
     }
   }, [businessVertical, loadGroups]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setLoginPromptOpen(true);
+    } else {
+      setLoginPromptOpen(false);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    const handler = () => setLoginPromptOpen(true);
+    if (typeof window !== "undefined") {
+      window.addEventListener("auth:login-required", handler);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("auth:login-required", handler);
+      }
+    };
+  }, []);
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-8">
       
@@ -71,6 +95,25 @@ export default function Home() {
           <div className="text-sm text-muted-foreground">Select a group to view vehicles.</div>
         )}
       </section>
+
+      <Dialog open={loginPromptOpen} onOpenChange={setLoginPromptOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Login Required</DialogTitle>
+            <DialogDescription>You must login to do this action.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setLoginPromptOpen(false);
+                router.replace("/login");
+              }}
+            >
+              Go to Login
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

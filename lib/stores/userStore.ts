@@ -51,16 +51,32 @@ export const useUserStore = create<UserState>()(
       setBusinessVertical: (v) => set({ businessVertical: v }),
       setAuthTokens: ({ token, refreshToken }) => set({ token, refreshToken, isAuthenticated: true }),
       setUserProfile: (p) =>
-        set({
-          username: p.name,
-          email: p.email,
-          businessVertical: p.business_vertical,
-          buyerId: p.id,
-          mobile: p.mobile,
-          address: p.address,
-          isAuthenticated: true,
+        set(() => {
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem("buyer-id", String(p.id ?? ""));
+            } catch {}
+          }
+          return {
+            username: p.name,
+            email: p.email,
+            businessVertical: p.business_vertical,
+            buyerId: p.id,
+            mobile: p.mobile,
+            address: p.address,
+            isAuthenticated: true,
+          } as Partial<UserState> as UserState;
         }),
-      clearAuth: () => set({ ...initial }),
+      clearAuth: () => {
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.removeItem("web-token");
+            localStorage.removeItem("web-refresh");
+            localStorage.removeItem("buyer-id");
+          } catch {}
+        }
+        set({ ...initial });
+      },
     }),
     {
       name: "user-store",
