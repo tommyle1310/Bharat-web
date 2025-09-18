@@ -14,14 +14,18 @@ import { Star, Settings, Hand, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useUserStore } from "@/lib/stores/userStore";
 import { watchlistService } from "@/lib/services/watchlist";
+import { socketService, normalizeAuctionEnd } from "@/lib/socket";
 
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
-  const { isAuthenticated } = useUserStore();
+  const { isAuthenticated, buyerId } = useUserStore();
   const [vehicle, setVehicle] = useState<VehicleApi | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [bidHistory, setBidHistory] = useState<BidHistoryItem[] | null>(null);
+  const [bidHistory, setBidHistory] = useState<BidHistoryItem[]>([]);
   const [bidHistoryError, setBidHistoryError] = useState<string | null>(null);
+  const [bidHistoryPage, setBidHistoryPage] = useState(1);
+  const [bidHistoryHasMore, setBidHistoryHasMore] = useState(true);
+  const [bidHistoryLoading, setBidHistoryLoading] = useState(false);
 
   console.log('check vevhicle', vehicle)
 
@@ -37,6 +41,84 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const [bidAmount, setBidAmount] = useState<string>("");
   const [placingBid, setPlacingBid] = useState(false);
   const [isFavorite, setIsFavorite] = useState<boolean>(false);
+  const [placeBidLimitsLoading, setPlaceBidLimitsLoading] = useState(false);
+  const [placeBidBuyerLimits, setPlaceBidBuyerLimits] = useState<BuyerLimits | null>(null);
+
+  // Socket event listeners for real-time updates
+  useEffect(() => {
+    if (!buyerId || !vehicle) return;
+
+    // Set buyer ID for socket connection
+    socketService.setBuyerId(buyerId);
+
+    // Listen for bidding status updates
+    const disposers: (() => void)[] = [];
+
+    // Handle winning status
+    const winningDisposer = socketService.onIsWinning((payload) => {
+      if (payload.vehicleId === Number(vehicle.vehicle_id)) {
+        setVehicle(prev => prev ? {
+          ...prev,
+          bidding_status: "Winning",
+          has_bidded: true
+        } : null);
+      }
+    });
+
+    // Handle losing status
+    const losingDisposer = socketService.onIsLosing((payload) => {
+      if (payload.vehicleId === Number(vehicle.vehicle_id)) {
+        setVehicle(prev => prev ? {
+          ...prev,
+          bidding_status: "Losing",
+          has_bidded: true
+        } : null);
+      }
+    });
+
+    // Handle winner updates
+    const winnerDisposer = socketService.onVehicleWinnerUpdate((payload) => {
+      if (payload.vehicleId === Number(vehicle.vehicle_id)) {
+        if (payload.winnerBuyerId === buyerId) {
+          setVehicle(prev => prev ? {
+            ...prev,
+            bidding_status: "Won",
+            has_bidded: true
+          } : null);
+        } else {
+          setVehicle(prev => prev ? {
+            ...prev,
+            bidding_status: "Lost",
+            has_bidded: true
+          } : null);
+        }
+        // Refresh bid history when winner is determined
+        if (buyerId) {
+          loadBidHistory(1, false);
+        }
+      }
+    });
+
+    // Handle endtime updates
+    const endtimeDisposer = socketService.onVehicleEndtimeUpdate((payload) => {
+      if (payload.vehicleId === Number(vehicle.vehicle_id)) {
+        const normalizedTime = normalizeAuctionEnd(payload.auctionEndDttm);
+        const endMs = new Date(normalizedTime).getTime();
+        const newRemaining = Math.max(0, Math.floor((endMs - Date.now()) / 1000));
+        setRemaining(newRemaining);
+        setVehicle(prev => prev ? {
+          ...prev,
+          end_time: payload.auctionEndDttm
+        } : null);
+      }
+    });
+
+    disposers.push(winningDisposer, losingDisposer, winnerDisposer, endtimeDisposer);
+
+    return () => {
+      disposers.forEach(dispose => dispose());
+    };
+  }, [buyerId, vehicle?.vehicle_id]);
 
   useEffect(() => {
     let mounted = true;
@@ -61,24 +143,39 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     } catch {}
   }
   // Fetch bid history when buyerId available
-  useEffect(() => {
-    const buyerIdStr = typeof window !== "undefined" ? localStorage.getItem("buyer-id") : null;
-    const buyerId = buyerIdStr ? Number(buyerIdStr) : NaN;
-    if (!vehicle?.vehicle_id || !buyerId || Number.isNaN(buyerId)) return;
-    let cancelled = false;
+  const loadBidHistory = React.useCallback(async (page: number, append = false) => {
+    if (!vehicle?.vehicle_id || !buyerId || bidHistoryLoading) return;
+    setBidHistoryLoading(true);
     setBidHistoryError(null);
-    bidsService
-      .getHistoryByVehicle(buyerId, Number(vehicle.vehicle_id))
-      .then((hist) => {
-        if (!cancelled) setBidHistory(hist);
-      })
-      .catch(() => {
-        if (!cancelled) setBidHistoryError("Unable to load bid history.");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [vehicle?.vehicle_id]);
+    try {
+      const result = await bidsService.getHistoryByVehicle(buyerId, Number(vehicle.vehicle_id), page);
+      if (append) {
+        setBidHistory(prev => [...prev, ...result.data]);
+      } else {
+        setBidHistory(result.data);
+      }
+      setBidHistoryPage(result.page);
+      setBidHistoryHasMore(result.page < result.totalPages);
+    } catch (err) {
+      if (!append) {
+        setBidHistoryError("Unable to load bid history.");
+      }
+    } finally {
+      setBidHistoryLoading(false);
+    }
+  }, [vehicle?.vehicle_id, buyerId, bidHistoryLoading]);
+
+  useEffect(() => {
+    if (vehicle?.vehicle_id && buyerId) {
+      loadBidHistory(1, false);
+    }
+  }, [vehicle?.vehicle_id, buyerId, loadBidHistory]);
+
+  const handleLoadMoreBidHistory = React.useCallback(() => {
+    if (bidHistoryHasMore && !bidHistoryLoading) {
+      loadBidHistory(bidHistoryPage + 1, true);
+    }
+  }, [bidHistoryHasMore, bidHistoryLoading, bidHistoryPage, loadBidHistory]);
 
   const [remaining, setRemaining] = useState<number>(() => {
     const end = vehicle?.end_time ? getIstEndMs(vehicle.end_time) : Date.now();
@@ -123,15 +220,13 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const onOpenAutoBid = (open: boolean) => {
     setAutoBidOpen(open);
     if (!open) return;
-    const buyerIdStr = typeof window !== "undefined" ? localStorage.getItem("buyer-id") : null;
-    const buyerId = buyerIdStr ? Number(buyerIdStr) : NaN;
-    if (!vehicle?.vehicle_id || !buyerId || Number.isNaN(buyerId)) return;
+    if (!vehicle?.vehicle_id || !buyerId) return;
     setAutoBidLoading(true);
-    Promise.all([
-      bidsService.getAutoBid(Number(vehicle.vehicle_id)),
-      bidsService.getBuyerLimits(buyerId),
-    ])
-      .then(([autoData, limits]) => {
+    
+    // Make API calls independent - don't let one failure affect the other
+    const autoBidPromise = bidsService.getAutoBid(Number(vehicle.vehicle_id))
+      .then((autoData) => {
+        console.log('getAutoBid success:', autoData);
         if (autoData && (autoData as any).vehicle_id) {
           const d = autoData as AutoBidData;
           setAutoBidData(d);
@@ -144,15 +239,32 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           setFormMaxPrice("");
           setFormStepAmt("");
         }
+      })
+      .catch((error) => {
+        console.log('getAutoBid failed (expected if no auto bid exists):', error);
+        setAutoBidData(null);
+        setFormStartAmt("");
+        setFormMaxPrice("");
+        setFormStepAmt("");
+      });
+
+    const buyerLimitsPromise = bidsService.getBuyerLimits(buyerId)
+      .then((limits) => {
+        console.log('getBuyerLimits success:', limits);
         setBuyerLimits(limits);
       })
+      .catch((error) => {
+        console.error('getBuyerLimits failed:', error);
+        setBuyerLimits(null);
+      });
+
+    // Wait for both to complete (regardless of success/failure)
+    Promise.allSettled([autoBidPromise, buyerLimitsPromise])
       .finally(() => setAutoBidLoading(false));
   };
 
   const onSubmitSetAutoBid = async () => {
-    const buyerIdStr = typeof window !== "undefined" ? localStorage.getItem("buyer-id") : null;
-    const buyerId = buyerIdStr ? Number(buyerIdStr) : NaN;
-    if (!vehicle?.vehicle_id || !buyerId || Number.isNaN(buyerId)) return;
+    if (!vehicle?.vehicle_id || !buyerId) return;
     setSetAutoBidSubmitting(true);
     try {
       await bidsService.setAutoBid({
@@ -173,9 +285,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   };
 
   const onUpdateAutoBid = async () => {
-    const buyerIdStr = typeof window !== "undefined" ? localStorage.getItem("buyer-id") : null;
-    const buyerId = buyerIdStr ? Number(buyerIdStr) : NaN;
-    if (!vehicle?.vehicle_id || !buyerId || Number.isNaN(buyerId)) return;
+    if (!vehicle?.vehicle_id || !buyerId) return;
     setSetAutoBidSubmitting(true);
     try {
       await bidsService.updateAutoBid(Number(vehicle.vehicle_id), {
@@ -218,7 +328,16 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="relative aspect-video bg-muted rounded-md overflow-hidden">
             {imageUrl && (
-              <Image src={imageUrl} alt={`${vehicle.make} ${vehicle.model}`} fill className="object-cover" />
+              <Image 
+                src={imageUrl} 
+                alt={`${vehicle.make} ${vehicle.model}`} 
+                fill 
+                className="object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/assets/logo.jpg';
+                }}
+              />
             )}
             <div className="absolute top-2 right-2 z-10">
               <button
@@ -313,7 +432,16 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <div className="text-primary">{vehicle.manager_phone}</div>
             </div>
             <div className="grid grid-cols-2 gap-2 mt-1">
-              <Dialog open={placeBidOpen} onOpenChange={setPlaceBidOpen}>
+              <Dialog open={placeBidOpen} onOpenChange={(open) => {
+                setPlaceBidOpen(open);
+                if (open && buyerId) {
+                  setPlaceBidLimitsLoading(true);
+                  bidsService.getBuyerLimits(buyerId)
+                    .then((limits) => setPlaceBidBuyerLimits(limits))
+                    .catch(() => setPlaceBidBuyerLimits(null))
+                    .finally(() => setPlaceBidLimitsLoading(false));
+                }
+              }}>
                 <DialogTrigger asChild>
                   <Button className="w-full">Place Bid</Button>
                 </DialogTrigger>
@@ -327,14 +455,42 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                       <div className="text-xs text-muted-foreground mb-1">Bid Amount</div>
                       <Input type="number" value={bidAmount} onChange={(e) => setBidAmount(e.target.value)} />
                     </div>
+                    <div className="rounded-md border p-3 text-xs">
+                      {placeBidLimitsLoading ? (
+                        <div className="text-muted-foreground">Loading limits...</div>
+                      ) : placeBidBuyerLimits ? (
+                        <div className="space-y-1">
+                          <div>Security Deposit: {placeBidBuyerLimits.security_deposit.toLocaleString()}</div>
+                          <div>Bid Limit: {placeBidBuyerLimits.bid_limit.toLocaleString()}</div>
+                          <div>Limit Used: {placeBidBuyerLimits.limit_used.toLocaleString()}</div>
+                          <div>Pending Limit: {placeBidBuyerLimits.pending_limit.toLocaleString()}</div>
+                          {placeBidBuyerLimits.active_vehicle_bids?.length ? (
+                            <div className="mt-2">
+                              <div className="font-medium text-[11px]">Active Vehicle Bids</div>
+                              {placeBidBuyerLimits.active_vehicle_bids.map((item) => (
+                                <div key={`avb-${item.vehicle_id}`}>Vehicle #{item.vehicle_id}: Max Bidded {item.max_bidded.toLocaleString()}</div>
+                              ))}
+                            </div>
+                          ) : null}
+                          {placeBidBuyerLimits.unpaid_vehicles?.length ? (
+                            <div className="mt-2">
+                              <div className="font-medium text-[11px]">Unpaid Vehicles</div>
+                              {placeBidBuyerLimits.unpaid_vehicles.map((item) => (
+                                <div key={`uv-${item.vehicle_id}`}>Vehicle #{item.vehicle_id}: Unpaid {item.unpaid_amt.toLocaleString()}</div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="text-muted-foreground">Limits unavailable</div>
+                      )}
+                    </div>
                   </div>
                   <DialogFooter>
                     <Button
                       disabled={placingBid}
                       onClick={async () => {
-                        const buyerIdStr = typeof window !== "undefined" ? localStorage.getItem("buyer-id") : null;
-                        const buyerId = buyerIdStr ? Number(buyerIdStr) : NaN;
-                        if (!buyerId || Number.isNaN(buyerId)) {
+                        if (!buyerId) {
                           toast.error("Buyer not identified");
                           return;
                         }
@@ -391,16 +547,6 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                       <div className="text-xs text-muted-foreground mb-1">Step Amount</div>
                       <Input type="number" value={formStepAmt} onChange={(e) => setFormStepAmt(e.target.value)} disabled={autoBidLoading} />
                     </div>
-                    {buyerLimits && (
-                      <div className="rounded-md border p-3 text-xs grid grid-cols-2 gap-x-4 gap-y-1">
-                        <div>Security Deposit: <span className="font-medium">{buyerLimits.security_deposit}</span></div>
-                        <div>Bid Limit: <span className="font-medium">{buyerLimits.bid_limit}</span></div>
-                        <div>Limit Used: <span className="font-medium">{buyerLimits.limit_used}</span></div>
-                        <div>Pending Limit: <span className="font-medium">{buyerLimits.pending_limit}</span></div>
-                        <div>Active Vehicles: <span className="font-medium">{buyerLimits.active_vehicle_bids?.length || 0}</span></div>
-                        <div>Unpaid Vehicles: <span className="font-medium">{buyerLimits.unpaid_vehicles?.length || 0}</span></div>
-                      </div>
-                    )}
                   <div className="rounded-md border p-3 text-xs">
                     {autoBidLoading ? (
                       <div className="text-muted-foreground">Loading limits...</div>
@@ -461,35 +607,52 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           {bidHistoryError ? (
             <div className="text-xs text-destructive">{bidHistoryError}</div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10">Mode</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead className="text-right">Time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(bidHistory || []).map((item) => (
-                  <TableRow key={item.bid_id}>
-                    <TableCell>
-                      {item.bid_mode === "A" ? (
-                        <Settings className="h-4 w-4" />
-                      ) : (
-                        <Hand className="h-4 w-4" />
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium">{item.bid_amt}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">{item.created_dttm}</TableCell>
-                  </TableRow>
-                ))}
-                {(!bidHistory || bidHistory.length === 0) && (
+            <>
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground">No bids yet.</TableCell>
+                    <TableHead className="w-10">Mode</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead className="text-right">Time</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {bidHistory.map((item) => (
+                    <TableRow key={item.bid_id}>
+                      <TableCell>
+                        {item.bid_mode === "A" ? (
+                          <Settings className="h-4 w-4" />
+                        ) : (
+                          <Hand className="h-4 w-4" />
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">{item.bid_amt}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{item.created_dttm}</TableCell>
+                    </TableRow>
+                  ))}
+                  {bidHistory.length === 0 && !bidHistoryLoading && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground">No bids yet.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+              {bidHistoryHasMore && (
+                <div className="flex justify-center py-2">
+                  {bidHistoryLoading ? (
+                    <div className="text-xs text-muted-foreground">Loading more bids...</div>
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleLoadMoreBidHistory}
+                    >
+                      Load More Bids
+                    </Button>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

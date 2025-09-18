@@ -16,6 +16,10 @@ export default function Home() {
   const router = useRouter();
   const [groups, setGroups] = useState<VehicleGroupApi[]>([]);
   const [vehicles, setVehicles] = useState<VehicleApi[]>([]);
+  const [vehiclesPagination, setVehiclesPagination] = useState<{ total: number; page: number; pageSize: number; totalPages: number } | null>(null);
+  const [loadMoreVehicles, setLoadMoreVehicles] = useState<(() => void) | null>(null);
+  const [vehiclesHasMore, setVehiclesHasMore] = useState(false);
+  const [vehiclesLoading, setVehiclesLoading] = useState(false);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -32,6 +36,19 @@ export default function Home() {
       const msg = e?.response?.data?.message || e?.message || "Failed to load groups";
       toast.error(msg);
     }
+  }, []);
+
+  const handleVehiclesUpdate = useCallback((newVehicles: VehicleApi[], pagination?: { total: number; page: number; pageSize: number; totalPages: number }) => {
+    setVehicles(newVehicles);
+    if (pagination) {
+      setVehiclesPagination(pagination);
+    }
+  }, []);
+
+  const handleLoadMoreUpdate = useCallback((loadMoreFn: () => void, hasMore: boolean, loading: boolean) => {
+    setLoadMoreVehicles(() => loadMoreFn);
+    setVehiclesHasMore(hasMore);
+    setVehiclesLoading(loading);
   }, []);
 
   useEffect(() => {
@@ -74,14 +91,29 @@ export default function Home() {
               <TabsTrigger value="B">Bank</TabsTrigger>
             </TabsList>
             <TabsContent value="I">
-              <GroupsWithFetcher initialGroups={groups} onVehicles={setVehicles} businessVertical={'I'} />
+              <GroupsWithFetcher 
+                initialGroups={groups} 
+                onVehicles={handleVehiclesUpdate} 
+                onLoadMore={handleLoadMoreUpdate}
+                businessVertical={'I'} 
+              />
             </TabsContent>
             <TabsContent value="B">
-              <GroupsWithFetcher initialGroups={groups} onVehicles={setVehicles} businessVertical={'B'} />
+              <GroupsWithFetcher 
+                initialGroups={groups} 
+                onVehicles={handleVehiclesUpdate} 
+                onLoadMore={handleLoadMoreUpdate}
+                businessVertical={'B'} 
+              />
             </TabsContent>
           </Tabs>
         ) : groups.length ? (
-          <GroupsWithFetcher initialGroups={groups} onVehicles={setVehicles} businessVertical={businessVertical} />
+          <GroupsWithFetcher 
+            initialGroups={groups} 
+            onVehicles={handleVehiclesUpdate} 
+            onLoadMore={handleLoadMoreUpdate}
+            businessVertical={businessVertical} 
+          />
         ) : (
           <div className="text-sm text-muted-foreground">Loading groups...</div>
         )}
@@ -90,7 +122,12 @@ export default function Home() {
       <section>
         <h2 className="text-lg font-semibold mb-3">Vehicles</h2>
         {vehicles.length ? (
-          <VehicleList vehicles={vehicles} />
+          <VehicleList 
+            vehicles={vehicles} 
+            onLoadMore={loadMoreVehicles || undefined}
+            hasMore={vehiclesHasMore}
+            loading={vehiclesLoading}
+          />
         ) : (
           <div className="text-sm text-muted-foreground">Select a group to view vehicles.</div>
         )}

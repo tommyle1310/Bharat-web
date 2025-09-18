@@ -8,9 +8,11 @@ export type ToggleWatchlistResponse = {
 };
 
 export const watchlistService = {
-  async getWatchlist(): Promise<VehicleApi[]> {
-    const res = await buyerApi.get("/watchlist");
-    return res.data.data as VehicleApi[];
+  async getWatchlist(page?: number): Promise<{ data: VehicleApi[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    const res = await buyerApi.get("/watchlist", {
+      params: { page: page || 1 }
+    });
+    return res.data.data;
   },
 
   async toggle(vehicleId: number): Promise<ToggleWatchlistResponse> {

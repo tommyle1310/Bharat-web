@@ -11,15 +11,17 @@ export const vehicleService = {
     type: string;
     title: string;
     businessVertical: "I" | "B" | "A";
-  }): Promise<VehicleApi[]> {
+    page?: number;
+  }): Promise<{ data: VehicleApi[]; total: number; page: number; pageSize: number; totalPages: number }> {
     const res = await buyerApi.get("/vehicles/groups/list", {
       params: {
         type: params.type,
         title: params.title,
         businessVertical: params.businessVertical,
+        page: params.page || 1,
       },
     });
-    return res.data.data as VehicleApi[];
+    return res.data.data;
   },
 
   async getVehicleById(vehicleId: string | number): Promise<VehicleApi> {

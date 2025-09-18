@@ -9,9 +9,11 @@ import type {
 } from "@/lib/types";
 
 export const bidsService = {
-  async getHistoryByVehicle(buyerId: number, vehicleId: number): Promise<BidHistoryItem[]> {
-    const res = await buyerApi.get(`/buyer-bids/history-by-vehicle/${buyerId}/${vehicleId}`);
-    return res.data.data as BidHistoryItem[];
+  async getHistoryByVehicle(buyerId: number, vehicleId: number, page?: number): Promise<{ data: BidHistoryItem[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    const res = await buyerApi.get(`/buyer-bids/history-by-vehicle/${buyerId}/${vehicleId}`, {
+      params: { page: page || 1 }
+    });
+    return res.data.data;
   },
 
   async getHistoryByBuyer(buyerId: number): Promise<BidHistoryItem[]> {
@@ -46,6 +48,7 @@ export const bidsService = {
 
   async getBuyerLimits(buyerId: number): Promise<BuyerLimits> {
     const res = await buyerApi.get(`/buyer-bids/limits/${buyerId}`);
+    console.log('check buyerlimit',res.data.data);
     return res.data.data as BuyerLimits;
   },
 };

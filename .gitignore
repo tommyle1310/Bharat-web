@@ -20,6 +20,10 @@
 # production
 /build
 
+# deployment bundles (keep out of git)
+/deploy/
+/deploy.zip
+
 # misc
 .DS_Store
 *.pem

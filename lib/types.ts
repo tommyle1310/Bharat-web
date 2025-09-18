@@ -32,7 +32,7 @@ export type VehicleApi = {
   manager_name: string;
   manager_phone: string;
   has_bidded: boolean;
-  bidding_status: "Winning" | "Losing" | null;
+  bidding_status: "Winning" | "Losing" | "Won" | "Lost" | null;
   bid_amount?: string;
   manager_email?: string;
   manager_image?: string;

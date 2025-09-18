@@ -49,7 +49,7 @@
   --white: #FFFFFF;
   --dark: #333333;
   --primary-raw: #67c151;
-  --primary: #059669; /* using buttonPrimary for UI primary */
+  --primary: #67c151; /* using the correct primary color */
   --primary-foreground: #FFFFFF;
   --primary-light: #e8fce3;
   --primary-dark: #047857;
