@@ -10,11 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn, getIstEndMs, ordinal } from "@/lib/utils";
-import { Star, Settings, Hand, Trash2, Save } from "lucide-react";
+import { Star, Settings, Hand, Trash2, Save, ZoomIn } from "lucide-react";
 import { toast } from "sonner";
 import { useUserStore } from "@/lib/stores/userStore";
 import { watchlistService } from "@/lib/services/watchlist";
 import { socketService, normalizeAuctionEnd } from "@/lib/socket";
+import { ImageCarousel } from "@/components/ui/image-carousel";
 
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
@@ -43,6 +44,9 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const [isFavorite, setIsFavorite] = useState<boolean>(false);
   const [placeBidLimitsLoading, setPlaceBidLimitsLoading] = useState(false);
   const [placeBidBuyerLimits, setPlaceBidBuyerLimits] = useState<BuyerLimits | null>(null);
+  const [imageCarouselOpen, setImageCarouselOpen] = useState(false);
+  const [vehicleImages, setVehicleImages] = useState<{ vehicle_image_id: number; vehicle_id: number; img_extension: string }[]>([]);
+  const [imagesLoading, setImagesLoading] = useState(false);
 
   // Socket event listeners for real-time updates
   useEffect(() => {
@@ -95,6 +99,17 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         // Refresh bid history when winner is determined
         if (buyerId) {
           loadBidHistory(1, false);
+        }
+        // Update end time if provided in winner update
+        if (payload.auctionEndDttm) {
+          const normalizedTime = normalizeAuctionEnd(payload.auctionEndDttm);
+          const endMs = new Date(normalizedTime).getTime();
+          const newRemaining = Math.max(0, Math.floor((endMs - Date.now()) / 1000));
+          setRemaining(newRemaining);
+          setVehicle(prev => prev ? {
+            ...prev,
+            end_time: payload.auctionEndDttm
+          } : null);
         }
       }
     });
@@ -163,19 +178,51 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     } finally {
       setBidHistoryLoading(false);
     }
-  }, [vehicle?.vehicle_id, buyerId, bidHistoryLoading]);
+  }, [vehicle?.vehicle_id, buyerId]);
 
+  // SAFE: Load bid history ONCE when vehicle or buyerId changes
   useEffect(() => {
     if (vehicle?.vehicle_id && buyerId) {
       loadBidHistory(1, false);
     }
-  }, [vehicle?.vehicle_id, buyerId, loadBidHistory]);
+  }, [vehicle?.vehicle_id, buyerId]); // REMOVED loadBidHistory from dependencies
 
-  const handleLoadMoreBidHistory = React.useCallback(() => {
-    if (bidHistoryHasMore && !bidHistoryLoading) {
-      loadBidHistory(bidHistoryPage + 1, true);
+  const handleLoadMoreBidHistory = React.useCallback(async () => {
+    if (!bidHistoryHasMore || bidHistoryLoading || !vehicle?.vehicle_id || !buyerId) return;
+    
+    setBidHistoryLoading(true);
+    try {
+      const result = await bidsService.getHistoryByVehicle(buyerId, Number(vehicle.vehicle_id), bidHistoryPage + 1);
+      setBidHistory(prev => [...prev, ...result.data]);
+      setBidHistoryPage(result.page);
+      setBidHistoryHasMore(result.page < result.totalPages);
+    } catch (err) {
+      console.error('Failed to load more bid history:', err);
+    } finally {
+      setBidHistoryLoading(false);
     }
-  }, [bidHistoryHasMore, bidHistoryLoading, bidHistoryPage, loadBidHistory]);
+  }, [bidHistoryHasMore, bidHistoryLoading, bidHistoryPage, vehicle?.vehicle_id, buyerId]);
+
+  const loadVehicleImages = React.useCallback(async () => {
+    if (!vehicle?.vehicle_id) return;
+    setImagesLoading(true);
+    try {
+      const images = await vehicleService.getVehicleImages(vehicle.vehicle_id);
+      setVehicleImages(images);
+    } catch (error) {
+      console.error('Failed to load vehicle images:', error);
+      setVehicleImages([]);
+    } finally {
+      setImagesLoading(false);
+    }
+  }, [vehicle?.vehicle_id]);
+
+  const handleImageClick = () => {
+    setImageCarouselOpen(true);
+    if (vehicleImages.length === 0) {
+      loadVehicleImages();
+    }
+  };
 
   const [remaining, setRemaining] = useState<number>(() => {
     const end = vehicle?.end_time ? getIstEndMs(vehicle.end_time) : Date.now();
@@ -326,7 +373,10 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         <p className="text-muted-foreground">{error || "Loading..."}</p>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="relative aspect-video bg-muted rounded-md overflow-hidden">
+          <div 
+            className="relative aspect-video bg-muted rounded-md overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={handleImageClick}
+          >
             {imageUrl && (
               <Image 
                 src={imageUrl} 
@@ -335,10 +385,17 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                 className="object-cover"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = '/assets/logo.jpg';
+                  if (target.src !== '/assets/logo.jpg') {
+                    target.src = '/assets/logo.jpg';
+                  }
                 }}
               />
             )}
+            <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors flex items-center justify-center">
+              <div className="opacity-0 hover:opacity-100 transition-opacity bg-white/90 rounded-full p-2">
+                <ZoomIn className="h-6 w-6 text-black" />
+              </div>
+            </div>
             <div className="absolute top-2 right-2 z-10">
               <button
                 className="rounded-full bg-white/90 p-1 shadow hover:bg-white"
@@ -656,6 +713,15 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           )}
         </div>
       )}
+
+      {/* Image Carousel Dialog */}
+      <ImageCarousel
+        open={imageCarouselOpen}
+        onOpenChange={setImageCarouselOpen}
+        vehicleId={vehicle?.vehicle_id || 0}
+        images={vehicleImages}
+        loading={imagesLoading}
+      />
     </div>
   );
 }

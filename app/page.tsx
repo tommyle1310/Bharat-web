@@ -15,6 +15,8 @@ import { useRouter } from "next/navigation";
 export default function Home() {
   const router = useRouter();
   const [groups, setGroups] = useState<VehicleGroupApi[]>([]);
+  const [groupsI, setGroupsI] = useState<VehicleGroupApi[]>([]);
+  const [groupsB, setGroupsB] = useState<VehicleGroupApi[]>([]);
   const [vehicles, setVehicles] = useState<VehicleApi[]>([]);
   const [vehiclesPagination, setVehiclesPagination] = useState<{ total: number; page: number; pageSize: number; totalPages: number } | null>(null);
   const [loadMoreVehicles, setLoadMoreVehicles] = useState<(() => void) | null>(null);
@@ -27,11 +29,18 @@ export default function Home() {
   const [loginLoading, setLoginLoading] = useState(false);
   const { businessVertical, setUserProfile, setAuthTokens, username, isAuthenticated } = useUserStore();
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
+  const [currentTab, setCurrentTab] = useState<"I" | "B">("I");
 
   const loadGroups = useCallback(async (bv: "I" | "B") => {
     try {
       const res = await buyerApi.get('/vehicles/groups', { params: { businessVertical: bv } });
-      setGroups(res.data.data as VehicleGroupApi[]);
+      const groupsData = res.data.data as VehicleGroupApi[];
+      setGroups(groupsData);
+      if (bv === "I") {
+        setGroupsI(groupsData);
+      } else if (bv === "B") {
+        setGroupsB(groupsData);
+      }
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || "Failed to load groups";
       toast.error(msg);
@@ -51,13 +60,27 @@ export default function Home() {
     setVehiclesLoading(loading);
   }, []);
 
+  const handleTabChange = useCallback((value: string) => {
+    const bv = value as "I" | "B";
+    setCurrentTab(bv);
+    loadGroups(bv);
+  }, []);
+
+  // Load groups on mount and when businessVertical changes
   useEffect(() => {
     if (businessVertical === "A") {
       loadGroups("I");
-    } else {
+    } else if (businessVertical === "I" || businessVertical === "B") {
       loadGroups(businessVertical);
+    } else {
+      loadGroups("I");
     }
-  }, [businessVertical, loadGroups]);
+  }, [businessVertical]); // Keep loadGroups out of dependencies to avoid infinite loop
+
+  // Also load groups on component mount regardless of authentication status
+  useEffect(() => {
+    loadGroups("I");
+  }, []); // Run once on mount
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -85,25 +108,27 @@ export default function Home() {
       <section>
         <h2 className="text-lg font-semibold mb-3">Vehicle Groups</h2>
         {businessVertical === "A" ? (
-          <Tabs defaultValue="I" onValueChange={(v) => loadGroups(v as any)}>
+          <Tabs defaultValue="I" onValueChange={handleTabChange}>
             <TabsList>
               <TabsTrigger value="I">Insurance</TabsTrigger>
               <TabsTrigger value="B">Bank</TabsTrigger>
             </TabsList>
             <TabsContent value="I">
               <GroupsWithFetcher 
-                initialGroups={groups} 
+                initialGroups={groupsI} 
                 onVehicles={handleVehiclesUpdate} 
                 onLoadMore={handleLoadMoreUpdate}
-                businessVertical={'I'} 
+                businessVertical={'I'}
+                isActive={currentTab === 'I'}
               />
             </TabsContent>
             <TabsContent value="B">
               <GroupsWithFetcher 
-                initialGroups={groups} 
+                initialGroups={groupsB} 
                 onVehicles={handleVehiclesUpdate} 
                 onLoadMore={handleLoadMoreUpdate}
-                businessVertical={'B'} 
+                businessVertical={'B'}
+                isActive={currentTab === 'B'}
               />
             </TabsContent>
           </Tabs>
@@ -112,7 +137,8 @@ export default function Home() {
             initialGroups={groups} 
             onVehicles={handleVehiclesUpdate} 
             onLoadMore={handleLoadMoreUpdate}
-            businessVertical={businessVertical} 
+            businessVertical={businessVertical}
+            isActive={true}
           />
         ) : (
           <div className="text-sm text-muted-foreground">Loading groups...</div>
@@ -129,7 +155,7 @@ export default function Home() {
             loading={vehiclesLoading}
           />
         ) : (
-          <div className="text-sm text-muted-foreground">Select a group to view vehicles.</div>
+          <div className="text-sm text-muted-foreground">This group has no vehicles.</div>
         )}
       </section>
 

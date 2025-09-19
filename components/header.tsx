@@ -120,22 +120,22 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" className="gap-2 pr-3 pl-2" aria-label="Account">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage alt="User" />
-                  <AvatarFallback>
-                    <User className="h-4 w-4 group-hover:text-black" />
-                  </AvatarFallback>
-                </Avatar>
-                {username ? <span className="text-sm font-medium max-w-[10rem] truncate">{username}</span> : null}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-56">
-              <div className="text-sm font-medium mb-2">Settings</div>
-              <div className="space-y-1">
-                {isAuthenticated ? (
+          {isAuthenticated ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" className="gap-2 pr-3 pl-2" aria-label="Account">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage alt="User" />
+                    <AvatarFallback>
+                      <User className="h-4 w-4 group-hover:text-black" />
+                    </AvatarFallback>
+                  </Avatar>
+                  {username ? <span className="text-sm font-medium max-w-[10rem] truncate">{username}</span> : null}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-56">
+                <div className="text-sm font-medium mb-2">Settings</div>
+                <div className="space-y-1">
                   <button
                     className="w-full text-left block rounded px-2 py-1 hover:bg-muted"
                     onClick={async () => {
@@ -146,17 +146,21 @@ export function Header() {
                   >
                     Logout
                   </button>
-                ) : (
-                  <>
-                    <Link href="/login" className="block rounded px-2 py-1 hover:bg-muted">Login</Link>
-                    <Link href="/register" className="block rounded px-2 py-1 hover:bg-muted">Register</Link>
-                  </>
-                )}
-                <Separator className="my-1" />
-                <Link href="/terms" className="block rounded px-2 py-1 hover:bg-muted">Terms & Conditions</Link>
-              </div>
-            </PopoverContent>
-          </Popover>
+                  <Separator className="my-1" />
+                  <Link href="/terms" className="block rounded px-2 py-1 hover:bg-muted">Terms & Conditions</Link>
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" asChild>
+                <Link href="/login">Login</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/register">Sign Up</Link>
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </header>

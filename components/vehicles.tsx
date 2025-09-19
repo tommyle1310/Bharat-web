@@ -77,21 +77,15 @@ export function VehicleList({
 }) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const handleScroll = useCallback(() => {
+  const handleLoadMoreClick = useCallback(async () => {
     if (loading || isLoadingMore || !hasMore || !onLoadMore) return;
-    
-    const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-    if (scrollTop + clientHeight >= scrollHeight - 1000) {
-      setIsLoadingMore(true);
-      onLoadMore();
-      setTimeout(() => setIsLoadingMore(false), 1000);
+    setIsLoadingMore(true);
+    try {
+      await onLoadMore();
+    } finally {
+      setIsLoadingMore(false);
     }
   }, [loading, isLoadingMore, hasMore, onLoadMore]);
-
-  useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
 
   return (
     <div className="space-y-4">
@@ -107,11 +101,7 @@ export function VehicleList({
           ) : (
             <Button 
               variant="outline" 
-              onClick={() => {
-                setIsLoadingMore(true);
-                onLoadMore?.();
-                setTimeout(() => setIsLoadingMore(false), 1000);
-              }}
+              onClick={handleLoadMoreClick}
             >
               Load More
             </Button>
@@ -185,6 +175,20 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
             has_bidded: true,
           }));
         }
+        // Update end time if provided in winner update
+        if (payload.auctionEndDttm) {
+          const normalizedTime = normalizeAuctionEnd(payload.auctionEndDttm);
+          const endMs = new Date(normalizedTime).getTime();
+          const newRemaining = Math.max(
+            0,
+            Math.floor((endMs - Date.now()) / 1000)
+          );
+          setRemaining(newRemaining);
+          setVehicleData((prev) => ({
+            ...prev,
+            end_time: payload.auctionEndDttm || prev.end_time,
+          }));
+        }
       }
     });
 
@@ -200,7 +204,7 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
         setRemaining(newRemaining);
         setVehicleData((prev) => ({
           ...prev,
-          end_time: payload.auctionEndDttm,
+          end_time: payload.auctionEndDttm || prev.end_time,
         }));
       }
     });
@@ -311,7 +315,9 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
             className="object-cover"
             onError={(e) => {
               const target = e.target as HTMLImageElement;
-              target.src = '/assets/logo.jpg';
+              if (target.src !== '/assets/logo.jpg') {
+                target.src = '/assets/logo.jpg';
+              }
             }}
           />
           <div className="absolute top-2 right-2 z-10">
@@ -617,17 +623,40 @@ export function GroupsWithFetcher({
   onVehicles,
   businessVertical,
   onLoadMore,
+  isActive = true,
 }: {
   initialGroups: VehicleGroupApi[];
   onVehicles: (vehicles: VehicleApi[], pagination?: { total: number; page: number; pageSize: number; totalPages: number }) => void;
   businessVertical: "I" | "B" | "A";
   onLoadMore?: (loadMoreFn: () => void, hasMore: boolean, loading: boolean) => void;
+  isActive?: boolean;
 }) {
   const [groups, setGroups] = useState<VehicleGroupApi[]>(initialGroups);
+  const [selectedGroup, setSelectedGroup] = useState<VehicleGroupApi | null>(null);
+  const [selectedGroupIndex, setSelectedGroupIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [allVehicles, setAllVehicles] = useState<VehicleApi[]>([]);
+  const [paginationData, setPaginationData] = useState<{ total: number; page: number; pageSize: number; totalPages: number } | null>(null);
+
+  // Update groups when initialGroups prop changes
+  useEffect(() => {
+    setGroups(initialGroups);
+    // Set the "All" group as selected when groups change (only if component is active and no group is selected)
+    if (isActive && initialGroups.length > 0 && !selectedGroup) {
+      const allGroupIndex = initialGroups.findIndex(g => g.title.toLowerCase() === 'all');
+      if (allGroupIndex !== -1) {
+        setSelectedGroup(initialGroups[allGroupIndex]);
+        setSelectedGroupIndex(allGroupIndex);
+      } else {
+        // Fallback to first group if "All" not found
+        setSelectedGroup(initialGroups[0]);
+        setSelectedGroupIndex(0);
+      }
+    }
+  }, [initialGroups, isActive, businessVertical]); // Add isActive and businessVertical to dependencies
+  
   const getGroupAsset = (title?: string) => {
     if (!title) return undefined;
     const t = title.toLowerCase().replace(/\s+/g, "");
@@ -656,66 +685,81 @@ export function GroupsWithFetcher({
     if (/fire.*loss/.test(title.toLowerCase())) return "/assets/fireloss.png";
     return undefined;
   };
-  useEffect(() => {
-    setGroups(initialGroups);
-  }, [initialGroups]);
 
+  // SAFE: Load initial vehicles ONCE when selected group changes
   useEffect(() => {
-    if (!groups.length) return;
-    const g = groups[0];
+    if (!selectedGroup) return;
     setLoading(true);
     setCurrentPage(1);
     setAllVehicles([]);
     vehicleService
-      .getVehiclesByGroup({ type: g.type, title: g.title, businessVertical, page: 1 })
+      .getVehiclesByGroup({ type: selectedGroup.type || '', title: selectedGroup.title, businessVertical, page: 1 })
       .then((result) => {
         setAllVehicles(result.data);
         setHasMore(result.page < result.totalPages);
-        onVehicles(result.data, result);
+        setPaginationData(result);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [groups, businessVertical, onVehicles]);
+  }, [selectedGroup, businessVertical]);
 
-  const loadMoreVehicles = useCallback(() => {
-    if (!groups.length || loading || !hasMore) return;
-    const g = groups[0];
+  // SAFE: Notify parent when vehicles change (deferred to avoid setState during render)
+  const onVehiclesRef = useRef(onVehicles);
+  onVehiclesRef.current = onVehicles;
+  
+  useEffect(() => {
+    if (paginationData) {
+      onVehiclesRef.current(allVehicles, paginationData);
+    }
+  }, [allVehicles, paginationData]);
+
+  // SAFE: Load more vehicles function
+  const loadMoreVehicles = useCallback(async () => {
+    if (!selectedGroup || loading || !hasMore) return;
     const nextPage = currentPage + 1;
     setLoading(true);
-    vehicleService
-      .getVehiclesByGroup({ type: g.type, title: g.title, businessVertical, page: nextPage })
-      .then((result) => {
-        const newVehicles = [...allVehicles, ...result.data];
-        setAllVehicles(newVehicles);
-        setCurrentPage(nextPage);
-        setHasMore(result.page < result.totalPages);
-        onVehicles(newVehicles, result);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [groups, businessVertical, onVehicles, currentPage, hasMore, loading, allVehicles]);
-
-  // Expose loadMoreVehicles function to parent
-  useEffect(() => {
-    if (onLoadMore) {
-      onLoadMore(loadMoreVehicles, hasMore, loading);
-    }
-  }, [onLoadMore, loadMoreVehicles, hasMore, loading]);
-
-  const handleClick = async (g: VehicleGroupApi) => {
     try {
+      const result = await vehicleService.getVehiclesByGroup({ type: selectedGroup.type || '', title: selectedGroup.title, businessVertical, page: nextPage });
+      setAllVehicles(prev => [...prev, ...result.data]);
+      setCurrentPage(nextPage);
+      setHasMore(result.page < result.totalPages);
+      setPaginationData(result);
+    } catch (error) {
+      console.error('Failed to load more vehicles:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedGroup, businessVertical, currentPage, hasMore, loading]);
+
+  // SAFE: Expose loadMoreVehicles function to parent - use ref to avoid infinite loops
+  const onLoadMoreRef = useRef(onLoadMore);
+  onLoadMoreRef.current = onLoadMore;
+  
+  useEffect(() => {
+    if (onLoadMoreRef.current) {
+      onLoadMoreRef.current(loadMoreVehicles, hasMore, loading);
+    }
+  }, [loadMoreVehicles, hasMore, loading]);
+
+  const handleClick = async (g: VehicleGroupApi, index: number) => {
+    // Only allow selection if this component is active
+    if (!isActive) return;
+    
+    try {
+      setSelectedGroup(g); // Set the selected group
+      setSelectedGroupIndex(index); // Set the selected group index
       setLoading(true);
       setCurrentPage(1);
       setAllVehicles([]);
       const result = await vehicleService.getVehiclesByGroup({ 
-        type: g.type, 
+        type: g.type || '', 
         title: g.title, 
         businessVertical, 
         page: 1 
       });
       setAllVehicles(result.data);
       setHasMore(result.page < result.totalPages);
-      onVehicles(result.data, result);
+      setPaginationData(result);
     } catch {
     } finally {
       setLoading(false);
@@ -726,11 +770,11 @@ export function GroupsWithFetcher({
       {groups.map((g, i) => (
         <div
           key={i}
-          onClick={() => handleClick(g)}
+          onClick={() => handleClick(g, i)}
           className="cursor-pointer select-none"
           style={{ WebkitTapHighlightColor: "transparent" }}
         >
-          <Card className="p-2 flex items-center gap-3 flex flex-row items-center justify-between hover:shadow-sm transition-shadow outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 active:ring-0">
+          <Card className={`p-2 flex items-center gap-3 flex flex-row items-center justify-between hover:shadow-sm transition-shadow outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 active:ring-0 ${isActive && selectedGroupIndex === i ? 'ring-2 ring-primary bg-primary/5' : ''}`}>
             <div className="h-16 w-16 bg-muted rounded overflow-hidden relative flex-shrink-0">
               {(() => {
                 const src = getGroupAsset(g.title) || g.image;
@@ -738,6 +782,12 @@ export function GroupsWithFetcher({
                   <Image
                     src={src}
                     alt={g.title}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      if (target.src !== '/assets/logo.jpg') {
+                        target.src = '/assets/logo.jpg';
+                      }
+                    }}
                     fill
                     className="object-cover rounded-lg"
                   />

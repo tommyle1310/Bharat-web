@@ -4,6 +4,7 @@ export type VehicleWinnerUpdate = {
   vehicleId: number;
   winnerBuyerId: number;
   loserBuyerId: number | null;
+  auctionEndDttm?: string; // Optional end time update
 };
 
 export type VehicleEndtimeUpdate = {

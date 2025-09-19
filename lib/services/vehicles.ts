@@ -28,6 +28,11 @@ export const vehicleService = {
     const res = await buyerApi.get(`/vehicles/${vehicleId}`);
     return res.data.data as VehicleApi;
   },
+
+  async getVehicleImages(vehicleId: string | number): Promise<{ vehicle_image_id: number; vehicle_id: number; img_extension: string }[]> {
+    const res = await buyerApi.get(`/vehicles/lookup/vehicle-images?id=${vehicleId}`);
+    return res.data.data;
+  },
 };
 
 

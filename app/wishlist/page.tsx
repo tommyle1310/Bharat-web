@@ -32,15 +32,25 @@ export default function WishlistPage() {
     }
   }, [loading]);
 
+  // SAFE: Load vehicles ONCE when component mounts
   useEffect(() => {
     loadVehicles(1, false);
-  }, [loadVehicles]);
+  }, []); // Empty dependency array - runs only once
 
-  const handleLoadMore = useCallback(() => {
-    if (hasMore && !loading) {
-      loadVehicles(currentPage + 1, true);
+  const handleLoadMore = useCallback(async () => {
+    if (!hasMore || loading) return;
+    setLoading(true);
+    try {
+      const result = await wishlistService.getWishlist(currentPage + 1);
+      setVehicles(prev => [...prev, ...result.data]);
+      setCurrentPage(result.page);
+      setHasMore(result.page < result.totalPages);
+    } catch (err) {
+      console.error('Failed to load more wishlist items:', err);
+    } finally {
+      setLoading(false);
     }
-  }, [hasMore, loading, currentPage, loadVehicles]);
+  }, [hasMore, loading, currentPage]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
