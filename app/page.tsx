@@ -103,8 +103,6 @@ export default function Home() {
   }, []);
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-8">
-      
-
       <section>
         <h2 className="text-lg font-semibold mb-3">Vehicle Groups</h2>
         {businessVertical === "A" ? (
