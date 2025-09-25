@@ -11,6 +11,7 @@ import { useUserStore } from "@/lib/stores/userStore";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
+import { Header } from "@/components/header";
 
 export default function Home() {
   const router = useRouter();
@@ -30,6 +31,8 @@ export default function Home() {
   const { businessVertical, setUserProfile, setAuthTokens, username, isAuthenticated } = useUserStore();
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState<"I" | "B">("I");
+  const [filteredVehicles, setFilteredVehicles] = useState<VehicleApi[]>([]);
+  const [hasActiveFilters, setHasActiveFilters] = useState(false);
 
   const loadGroups = useCallback(async (bv: "I" | "B") => {
     try {
@@ -59,6 +62,24 @@ export default function Home() {
     setVehiclesHasMore(hasMore);
     setVehiclesLoading(loading);
   }, []);
+
+  const handleFilterResults = useCallback((vehicles: VehicleApi[]) => {
+    setFilteredVehicles(vehicles);
+    setHasActiveFilters(true);
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setFilteredVehicles([]);
+    setHasActiveFilters(false);
+    // Reset to initial state by reloading groups
+    if (businessVertical === "A") {
+      loadGroups("I");
+    } else if (businessVertical === "I" || businessVertical === "B") {
+      loadGroups(businessVertical);
+    } else {
+      loadGroups("I");
+    }
+  }, [businessVertical, loadGroups]);
 
   const handleTabChange = useCallback((value: string) => {
     const bv = value as "I" | "B";
@@ -102,9 +123,39 @@ export default function Home() {
     };
   }, []);
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-8">
-      <section>
-        <h2 className="text-lg font-semibold mb-3">Vehicle Groups</h2>
+    <div className="min-h-screen">
+      <Header 
+        onFilterResults={handleFilterResults} 
+        onClearFilters={clearFilters}
+        hasActiveFilters={hasActiveFilters}
+      />
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+        {hasActiveFilters && (
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold">Filtered Results</h2>
+            <Button variant="outline" onClick={clearFilters}>
+              Clear Filters
+            </Button>
+          </div>
+        )}
+        
+        {hasActiveFilters ? (
+          <section>
+            {filteredVehicles.length > 0 ? (
+              <VehicleList 
+                vehicles={filteredVehicles} 
+                onLoadMore={undefined}
+                hasMore={false}
+                loading={false}
+              />
+            ) : (
+              <div className="text-sm text-muted-foreground">No vehicles match your filters.</div>
+            )}
+          </section>
+        ) : (
+          <>
+            <section>
+              <h2 className="text-lg font-semibold mb-3">Vehicle Groups</h2>
         {businessVertical === "A" ? (
           <Tabs defaultValue="I" onValueChange={handleTabChange}>
             <TabsList>
@@ -138,24 +189,26 @@ export default function Home() {
             businessVertical={businessVertical}
             isActive={true}
           />
-        ) : (
-          <div className="text-sm text-muted-foreground">Loading groups...</div>
-        )}
-      </section>
+              ) : (
+                <div className="text-sm text-muted-foreground">Loading groups...</div>
+              )}
+            </section>
 
-      <section>
-        <h2 className="text-lg font-semibold mb-3">Vehicles</h2>
-        {vehicles.length ? (
-          <VehicleList 
-            vehicles={vehicles} 
-            onLoadMore={loadMoreVehicles || undefined}
-            hasMore={vehiclesHasMore}
-            loading={vehiclesLoading}
-          />
-        ) : (
-          <div className="text-sm text-muted-foreground">This group has no vehicles.</div>
+            <section>
+              <h2 className="text-lg font-semibold mb-3">Vehicles</h2>
+              {vehicles.length ? (
+                <VehicleList 
+                  vehicles={vehicles} 
+                  onLoadMore={loadMoreVehicles || undefined}
+                  hasMore={vehiclesHasMore}
+                  loading={vehiclesLoading}
+                />
+              ) : (
+                <div className="text-sm text-muted-foreground">This group has no vehicles.</div>
+              )}
+            </section>
+          </>
         )}
-      </section>
 
       <Dialog open={loginPromptOpen} onOpenChange={setLoginPromptOpen}>
         <DialogContent>
@@ -175,6 +228,7 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

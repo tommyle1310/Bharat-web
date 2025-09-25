@@ -8,6 +8,7 @@ import { VehicleList } from "@/components/vehicles";
 import { vehicleService } from "@/lib/services/vehicles";
 import type { VehicleApi } from "@/lib/types";
 import { useRouter } from "next/navigation";
+import { Header } from "@/components/header";
 
 interface FilterState {
   vehicleTypes: number[];
@@ -174,18 +175,20 @@ export default function FilterPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-      <div className="flex items-center gap-4 mb-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.back()}
-          className="lg:hidden"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-xl font-semibold">Filter Vehicles</h1>
-      </div>
+    <div className="min-h-screen">
+      <Header />
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex items-center gap-4 mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+            className="lg:hidden"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-xl font-semibold">Filter Vehicles</h1>
+        </div>
       
       <div className="space-y-6">
         {/* Vehicle Types */}
@@ -333,6 +336,7 @@ export default function FilterPage() {
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

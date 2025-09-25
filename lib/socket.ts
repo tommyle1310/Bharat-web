@@ -29,7 +29,7 @@ class SocketService {
   private socket: Socket | null = null;
   private buyerId: number | null = null;
   private isConnected = false;
-  private baseUrl = 'http://localhost:1310'; // Update with your actual backend URL
+  private baseUrl = 'http://13.203.1.159:1310'; // Update with your actual backend URL
 
   private ensureConnected() {
     if (this.socket) return;

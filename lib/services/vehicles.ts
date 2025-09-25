@@ -34,8 +34,8 @@ export const vehicleService = {
     return res.data.data;
   },
 
-  async searchVehicles(keyword: string): Promise<{ data: VehicleApi[]; total: number; page: number; pageSize: number; totalPages: number }> {
-    const res = await buyerApi.get("/vehicles/search", { params: { keyword } });
+  async searchVehicles(keyword: string, page: number = 1): Promise<{ data: VehicleApi[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    const res = await buyerApi.get("/vehicles/search", { params: { keyword, page } });
     return res.data.data;
   },
 

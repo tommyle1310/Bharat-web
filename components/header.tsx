@@ -12,6 +12,9 @@ import Image from "next/image";
 import { useUserStore } from "@/lib/stores/userStore";
 import { authService } from "@/lib/services/auth";
 import { SearchComponent } from "@/components/search";
+import { FilterDialog } from "@/components/filter-dialog";
+import { VehicleList } from "@/components/vehicles";
+import type { VehicleApi } from "@/lib/types";
 
 const navItems = [
   { href: "/", label: "Home", icon: Home },
@@ -29,10 +32,17 @@ const mobileNavItems = [
   { href: "/filter", label: "Filter", icon: Filter },
 ];
 
-export function Header() {
+interface HeaderProps {
+  onFilterResults?: (vehicles: VehicleApi[]) => void;
+  onClearFilters?: () => void;
+  hasActiveFilters?: boolean;
+}
+
+export function Header({ onFilterResults, onClearFilters, hasActiveFilters }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const { username, isAuthenticated, clearAuth } = useUserStore();
   return (
     <header className="sticky top-0 z-50 w-full border-b backdrop-blur supports-[backdrop-filter]:bg-[#f6f7f7]">
@@ -129,7 +139,17 @@ export function Header() {
               );
             })}
           </nav>
-          <SearchComponent className="w-80" />
+          <div className="flex items-center gap-2">
+            <SearchComponent className="w-80" />
+            <Button
+              variant={hasActiveFilters ? "default" : "outline"}
+              onClick={() => setFilterDialogOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Filter className="h-4 w-4" />
+              Filter
+            </Button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -176,6 +196,21 @@ export function Header() {
           )}
         </div>
       </div>
+
+      <FilterDialog
+        open={filterDialogOpen}
+        onOpenChange={setFilterDialogOpen}
+        onFilter={(vehicles) => {
+          if (onFilterResults) {
+            onFilterResults(vehicles);
+          }
+        }}
+        onClearFilters={() => {
+          if (onClearFilters) {
+            onClearFilters();
+          }
+        }}
+      />
     </header>
   );
 }

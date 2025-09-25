@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { VehicleList } from "@/components/vehicles";
 import type { VehicleApi } from "@/lib/types";
 import { wishlistService } from "@/lib/services/wishlist";
+import { Header } from "@/components/header";
 
 export default function WishlistPage() {
   const [vehicles, setVehicles] = useState<VehicleApi[]>([]);
@@ -53,20 +54,23 @@ export default function WishlistPage() {
   }, [hasMore, loading, currentPage]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-      <h1 className="text-xl font-semibold mb-4">Wishlist</h1>
-      {error ? (
-        <p className="text-muted-foreground">{error}</p>
-      ) : vehicles.length === 0 && !loading ? (
-        <p className="text-muted-foreground">No vehicles in wishlist.</p>
-      ) : (
-        <VehicleList 
-          vehicles={vehicles} 
-          onLoadMore={handleLoadMore}
-          hasMore={hasMore}
-          loading={loading}
-        />
-      )}
+    <div className="min-h-screen">
+      <Header />
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+        <h1 className="text-xl font-semibold mb-4">Wishlist</h1>
+        {error ? (
+          <p className="text-muted-foreground">{error}</p>
+        ) : vehicles.length === 0 && !loading ? (
+          <p className="text-muted-foreground">No vehicles in wishlist.</p>
+        ) : (
+          <VehicleList 
+            vehicles={vehicles} 
+            onLoadMore={handleLoadMore}
+            hasMore={hasMore}
+            loading={loading}
+          />
+        )}
+      </div>
     </div>
   );
 }

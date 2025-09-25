@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 
 export const buyerApi: AxiosInstance = axios.create({
-	baseURL: 'http://localhost:1310/kmsg/buyer',
+	baseURL: 'http://13.203.1.159:1310/kmsg/buyer',
 	timeout: 120000,
 	headers: { 'Content-Type': 'application/json' },
 });

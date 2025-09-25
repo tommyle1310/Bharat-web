@@ -12,6 +12,7 @@ interface FilterDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onFilter: (vehicles: VehicleApi[]) => void;
+  onClearFilters?: () => void;
 }
 
 interface FilterState {
@@ -22,7 +23,7 @@ interface FilterState {
   states: number[];
 }
 
-export function FilterDialog({ open, onOpenChange, onFilter }: FilterDialogProps) {
+export function FilterDialog({ open, onOpenChange, onFilter, onClearFilters }: FilterDialogProps) {
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [lookupData, setLookupData] = useState({
@@ -119,6 +120,9 @@ export function FilterDialog({ open, onOpenChange, onFilter }: FilterDialogProps
       rcAvailable: null,
       states: [],
     });
+    if (onClearFilters) {
+      onClearFilters();
+    }
   };
 
   const applyFilters = async () => {

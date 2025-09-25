@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn, getIstEndMs, ordinal } from "@/lib/utils";
-import { Star, Settings, Hand, Trash2, Save, ZoomIn } from "lucide-react";
+import { Star, Settings, Hand, Trash2, Save, ZoomIn, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useUserStore } from "@/lib/stores/userStore";
 import { watchlistService } from "@/lib/services/watchlist";
@@ -47,6 +47,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const [imageCarouselOpen, setImageCarouselOpen] = useState(false);
   const [vehicleImages, setVehicleImages] = useState<{ vehicle_image_id: number; vehicle_id: number; img_extension: string }[]>([]);
   const [imagesLoading, setImagesLoading] = useState(false);
+  const [hasAutoBid, setHasAutoBid] = useState(false);
 
   // Socket event listeners for real-time updates
   useEffect(() => {
@@ -109,7 +110,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           setVehicle(prev => prev ? {
             ...prev,
             end_time: payload.auctionEndDttm
-          } : null);
+          } : null as any);
         }
       }
     });
@@ -152,6 +153,23 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       mounted = false;
     };
   }, [id]);
+
+  // Check for existing auto bid when vehicle loads
+  useEffect(() => {
+    if (!vehicle?.vehicle_id || !buyerId) return;
+    
+    bidsService.getAutoBid(Number(vehicle.vehicle_id))
+      .then((autoData) => {
+        if (autoData && (autoData as any).vehicle_id) {
+          setHasAutoBid(true);
+        } else {
+          setHasAutoBid(false);
+        }
+      })
+      .catch(() => {
+        setHasAutoBid(false);
+      });
+  }, [vehicle?.vehicle_id, buyerId]);
   if (typeof window !== "undefined") {
     try {
       console.log('cehck bueyr id', localStorage.getItem("buyer-id"));
@@ -280,11 +298,13 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           setFormStartAmt(String(d.bid_start_amt ?? ""));
           setFormMaxPrice(String(d.max_price ?? d.max_bid_amt ?? ""));
           setFormStepAmt(String(d.step_amt ?? ""));
+          setHasAutoBid(true);
         } else {
           setAutoBidData(null);
           setFormStartAmt("");
           setFormMaxPrice("");
           setFormStepAmt("");
+          setHasAutoBid(false);
         }
       })
       .catch((error) => {
@@ -293,6 +313,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         setFormStartAmt("");
         setFormMaxPrice("");
         setFormStepAmt("");
+        setHasAutoBid(false);
       });
 
     const buyerLimitsPromise = bidsService.getBuyerLimits(buyerId)
@@ -322,6 +343,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         step_amount: Number(formStepAmt || 0),
       });
       setAutoBidOpen(false);
+      setHasAutoBid(true);
       toast.success("Auto bid set");
     } catch (e) {
       const msg = (e as any)?.response?.data?.message || (e as any)?.message || "Failed to set auto bid";
@@ -343,6 +365,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         step_amount: Number(formStepAmt || 0),
       } as any);
       setAutoBidOpen(false);
+      setHasAutoBid(true);
       toast.success("Auto bid updated");
     } catch (e) {
       const msg = (e as any)?.response?.data?.message || (e as any)?.message || "Failed to update auto bid";
@@ -358,6 +381,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     try {
       await bidsService.deleteAutoBid(Number(vehicle.vehicle_id));
       setAutoBidOpen(false);
+      setHasAutoBid(false);
       toast.success("Auto bid deleted");
     } catch (e) {
       const msg = (e as any)?.response?.data?.message || (e as any)?.message || "Failed to delete auto bid";
@@ -567,7 +591,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                               bidsService.getHistoryByVehicle(buyerId, Number(vehicle.vehicle_id)),
                             ]);
                             setVehicle(freshVehicle);
-                            setBidHistory(freshHistory);
+                            setBidHistory(freshHistory as any);
                           } catch {}
                         } catch (e: any) {
                           const msg = e?.response?.data?.message || e?.message || "Failed to place bid";
@@ -584,7 +608,16 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               </Dialog>
               <Dialog open={autoBidOpen} onOpenChange={onOpenAutoBid}>
                 <DialogTrigger asChild>
-                  <Button variant="secondary" className="w-full">Auto Bid</Button>
+                  <Button 
+                    variant="secondary" 
+                    className={`w-full relative overflow-hidden ${hasAutoBid ? 'border-2 border-primary' : ''}`}
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    Auto Bid
+                    {hasAutoBid && (
+                      <div className="absolute inset-0 -top-1 -bottom-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-30 animate-pulse"></div>
+                    )}
+                  </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
@@ -718,7 +751,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       <ImageCarousel
         open={imageCarouselOpen}
         onOpenChange={setImageCarouselOpen}
-        vehicleId={vehicle?.vehicle_id || 0}
+        vehicleId={vehicle?.vehicle_id || 0 as any}
         images={vehicleImages}
         loading={imagesLoading}
       />
