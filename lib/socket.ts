@@ -132,11 +132,54 @@ export const socketService = new SocketService();
 
 // Helper to normalize incoming endtime to ISO string for reliable Date parsing across platforms
 export function normalizeAuctionEnd(auctionEndDttm: string): string {
-  // Convert 'YYYY-MM-DD HH:mm:ss' to ISO with Z
+  // Normalize variants like 'YYYY-MM-DD HH:mm:ss' or 'YYYY-MM-DD\u00A012:00:00' to ISO-like.
+  // Also pass through already-ISO strings like 'YYYY-MM-DDTHH:mm:ssZ' or with timezone offsets.
   if (!auctionEndDttm) return '';
-  const isoLike = auctionEndDttm.replace(' ', 'T');
-  const withZ = isoLike.endsWith('Z') ? isoLike : `${isoLike}Z`;
-  return withZ;
+
+  const trimmed = String(auctionEndDttm).trim();
+  console.log('normalizeAuctionEnd input:', trimmed);
+
+  // Handle 'DD-MMM-YYYY HH:mm:ss AM/PM' (e.g., '08-Oct-2025 05:20:00 PM')
+  // Convert to 'YYYY-MM-DDTHH:mm:ssZ' (assume incoming time is UTC if no TZ given)
+  const m = /^(\d{2})-([A-Za-z]{3})-(\d{4})[\s\u00A0]+(\d{1,2}):(\d{2}):(\d{2})[\s\u00A0]*([AP]M)$/i.exec(trimmed);
+  if (m) {
+    console.log('DD-MMM-YYYY format matched:', m);
+    const day = m[1];
+    const monAbbr = m[2].toLowerCase();
+    const year = m[3];
+    let hour = parseInt(m[4], 10);
+    const minute = m[5];
+    const second = m[6];
+    const ampm = m[7].toUpperCase();
+    const monthMap: Record<string, string> = {
+      jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+      jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+    };
+    const month = monthMap[monAbbr];
+    if (month) {
+      if (ampm === 'AM') {
+        if (hour === 12) hour = 0; // 12:xx AM -> 00:xx
+      } else {
+        if (hour !== 12) hour += 12; // 1-11 PM -> +12
+      }
+      const hourStr = String(hour).padStart(2, '0');
+      const result = `${year}-${month}-${day}T${hourStr}:${minute}:${second}Z`;
+      console.log('DD-MMM-YYYY converted to:', result);
+      return result;
+    }
+  }
+
+  // Replace any whitespace (including NBSP) between date and time with 'T' if 'T' is not already present
+  const hasTSeparator = trimmed.includes('T');
+  const ensuredT = hasTSeparator
+    ? trimmed
+    : trimmed.replace(/(\d{4}-\d{2}-\d{2})[\s\u00A0]+(\d{2}:\d{2}:\d{2}(?:\.\d+)??)/, '$1T$2');
+
+  // If there's already a timezone designator (Z or +hh:mm / -hh:mm), return as is. Otherwise, assume UTC and append Z
+  const hasTimezone = /[Zz]$|[+-]\d{2}:\d{2}$/.test(ensuredT);
+  const result = hasTimezone ? ensuredT : `${ensuredT}Z`;
+  console.log('Final normalized result:', result);
+  return result;
 }
 
 // Helper to convert IST time to milliseconds for countdown

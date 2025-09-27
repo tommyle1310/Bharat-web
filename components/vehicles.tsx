@@ -194,13 +194,17 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
 
     // Handle endtime updates
     const endtimeDisposer = socketService.onVehicleEndtimeUpdate((payload) => {
-      if (payload.vehicleId === Number(vehicleData.vehicle_id)) {
+      if (Number(payload.vehicleId) === Number(vehicleData.vehicle_id)) {
+        console.log('Processing endtime update for vehicle:', vehicleData.vehicle_id, 'payload:', payload);
         const normalizedTime = normalizeAuctionEnd(payload.auctionEndDttm);
+        console.log('Normalized time:', normalizedTime);
         const endMs = new Date(normalizedTime).getTime();
+        console.log('End time in ms:', endMs, 'Current time:', Date.now());
         const newRemaining = Math.max(
           0,
           Math.floor((endMs - Date.now()) / 1000)
         );
+        console.log('New remaining seconds:', newRemaining);
         setRemaining(newRemaining);
         setVehicleData((prev) => ({
           ...prev,

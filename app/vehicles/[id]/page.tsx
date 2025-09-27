@@ -16,6 +16,7 @@ import { useUserStore } from "@/lib/stores/userStore";
 import { watchlistService } from "@/lib/services/watchlist";
 import { socketService, normalizeAuctionEnd } from "@/lib/socket";
 import { ImageCarousel } from "@/components/ui/image-carousel";
+import { Header } from "@/components/header";
 
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
@@ -117,10 +118,14 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
     // Handle endtime updates
     const endtimeDisposer = socketService.onVehicleEndtimeUpdate((payload) => {
-      if (payload.vehicleId === Number(vehicle.vehicle_id)) {
+      if (Number(payload.vehicleId) === Number(vehicle.vehicle_id)) {
+        console.log('Processing endtime update for vehicle:', vehicle.vehicle_id, 'payload:', payload);
         const normalizedTime = normalizeAuctionEnd(payload.auctionEndDttm);
+        console.log('Normalized time:', normalizedTime);
         const endMs = new Date(normalizedTime).getTime();
+        console.log('End time in ms:', endMs, 'Current time:', Date.now());
         const newRemaining = Math.max(0, Math.floor((endMs - Date.now()) / 1000));
+        console.log('New remaining seconds:', newRemaining);
         setRemaining(newRemaining);
         setVehicle(prev => prev ? {
           ...prev,
@@ -392,7 +397,9 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6 space-y-4">
+    <div className="min-h-screen">
+      <Header />
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6 space-y-4">
       {!vehicle ? (
         <p className="text-muted-foreground">{error || "Loading..."}</p>
       ) : (
@@ -755,6 +762,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         images={vehicleImages}
         loading={imagesLoading}
       />
+      </div>
     </div>
   );
 }
