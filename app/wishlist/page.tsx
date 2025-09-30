@@ -4,6 +4,7 @@ import { VehicleList } from "@/components/vehicles";
 import type { VehicleApi } from "@/lib/types";
 import { wishlistService } from "@/lib/services/wishlist";
 import { Header } from "@/components/header";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 
 export default function WishlistPage() {
   const [vehicles, setVehicles] = useState<VehicleApi[]>([]);
@@ -57,6 +58,19 @@ export default function WishlistPage() {
     <div className="min-h-screen">
       <Header />
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+        <div className="mb-4">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/">Home</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Wishlist</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
         <h1 className="text-xl font-semibold mb-4">Wishlist</h1>
         {error ? (
           <p className="text-muted-foreground">{error}</p>

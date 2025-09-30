@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, User, Home, Heart, Star, Trophy, Search, Filter } from "lucide-react";
+import { Menu, User, Home, Star, Trophy, Search, Filter, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -18,15 +18,15 @@ import type { VehicleApi } from "@/lib/types";
 
 const navItems = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/watchlist", label: "Watchlist", icon: Star },
-  { href: "/wishlist", label: "Wishlist", icon: Heart },
+  { href: "/watchlist", label: "Watchlist", icon: Bookmark },
+  { href: "/wishlist", label: "Wishlist", icon: Star },
   { href: "/wins", label: "Wins", icon: Trophy },
 ];
 
 const mobileNavItems = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/watchlist", label: "Watchlist", icon: Star },
-  { href: "/wishlist", label: "Wishlist", icon: Heart },
+  { href: "/watchlist", label: "Watchlist", icon: Bookmark },
+  { href: "/wishlist", label: "Wishlist", icon: Star },
   { href: "/wins", label: "Wins", icon: Trophy },
   { href: "/search", label: "Search", icon: Search },
   { href: "/filter", label: "Filter", icon: Filter },

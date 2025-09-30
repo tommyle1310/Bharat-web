@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { authService } from "@/lib/services/auth";
 import { useUserStore } from "@/lib/stores/userStore";
 import { toast } from "sonner";
+import Image from "next/image";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,7 +25,14 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto max-w-md px-4 sm:px-6 lg:px-8 py-10">
-      <h1 className="text-xl font-semibold mb-4">Login</h1>
+        <div className="w-full rounded-xl p-6 bg-gradient-to-r mb-6 from-slate-50 to-slate-100 border">
+          <div className="flex items-center flex-col gap-3">
+            <Image src="/assets/logo.jpg" alt="Indus Salvage" width={100} height={100} className="rounded-sm object-contain" />
+            <div>
+              <h1 className="text-xl font-semibold">Login</h1>
+            </div>
+          </div>
+        </div>
       <div className="space-y-3">
         {!hasUsername && (
           <>
@@ -48,6 +56,9 @@ export default function LoginPage() {
                 Password
               </Button>
               <Button className="flex-1" variant="outline">OTP</Button>
+            </div>
+            <div className="text-sm flex justify-center items-center gap-2 text-muted-foreground">
+              Don&apos;t have an account? <a href="/register" className="text-primary underline">Register</a>
             </div>
           </>
         )}
@@ -96,6 +107,9 @@ export default function LoginPage() {
             >
               Back
             </Button>
+            <div className="text-sm flex justify-center items-center gap-2 text-muted-foreground text-center">
+              Don&apos;t have an account? <a href="/register" className="text-primary underline">Register</a>
+            </div>
           </div>
         )}
       </div>

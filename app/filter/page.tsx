@@ -9,6 +9,8 @@ import { vehicleService } from "@/lib/services/vehicles";
 import type { VehicleApi } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/header";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 
 interface FilterState {
   vehicleTypes: number[];
@@ -169,6 +171,19 @@ export default function FilterPage() {
           </Button>
           <h1 className="text-xl font-semibold">Filter Vehicles</h1>
         </div>
+        <div className="mb-4">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/">Home</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Filter</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
         <div className="p-4 text-center">Loading filter options...</div>
       </div>
     );
@@ -191,10 +206,31 @@ export default function FilterPage() {
         </div>
       
       <div className="space-y-6">
+        <Collapsible defaultOpen>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-medium">Filters</h2>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                Show/Hide
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent className="space-y-6 mt-2">
         {/* Vehicle Types */}
         <div>
           <Label className="text-base font-medium">Vehicle Types</Label>
-          <div className="grid grid-cols-2 gap-2 mt-2">
+          <div className="flex items-center gap-3 mt-2 mb-1">
+            <Checkbox id="vehicle-types-all" checked={filters.vehicleTypes.length === lookupData.vehicleTypes.length && lookupData.vehicleTypes.length > 0} onCheckedChange={(checked) => {
+              if (checked) {
+                setFilters(prev => ({ ...prev, vehicleTypes: lookupData.vehicleTypes.map(v => v.id) }));
+              } else {
+                setFilters(prev => ({ ...prev, vehicleTypes: [] }));
+              }
+            }} />
+            <Label htmlFor="vehicle-types-all" className="text-sm">Select All</Label>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             {lookupData.vehicleTypes.map((type) => (
               <div key={type.id} className="flex items-center space-x-2">
                 <Checkbox
@@ -213,7 +249,17 @@ export default function FilterPage() {
         {/* Fuel Types */}
         <div>
           <Label className="text-base font-medium">Fuel Types</Label>
-          <div className="grid grid-cols-2 gap-2 mt-2">
+          <div className="flex items-center gap-3 mt-2 mb-1">
+            <Checkbox id="fuel-types-all" checked={filters.fuelTypes.length === lookupData.fuelTypes.length && lookupData.fuelTypes.length > 0} onCheckedChange={(checked) => {
+              if (checked) {
+                setFilters(prev => ({ ...prev, fuelTypes: lookupData.fuelTypes.map(v => v.id) }));
+              } else {
+                setFilters(prev => ({ ...prev, fuelTypes: [] }));
+              }
+            }} />
+            <Label htmlFor="fuel-types-all" className="text-sm">Select All</Label>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             {lookupData.fuelTypes.map((fuel) => (
               <div key={fuel.id} className="flex items-center space-x-2">
                 <Checkbox
@@ -232,7 +278,17 @@ export default function FilterPage() {
         {/* Ownership Types */}
         <div>
           <Label className="text-base font-medium">Ownership</Label>
-          <div className="grid grid-cols-2 gap-2 mt-2">
+          <div className="flex items-center gap-3 mt-2 mb-1">
+            <Checkbox id="ownership-all" checked={filters.ownershipTypes.length === lookupData.ownershipTypes.length && lookupData.ownershipTypes.length > 0} onCheckedChange={(checked) => {
+              if (checked) {
+                setFilters(prev => ({ ...prev, ownershipTypes: lookupData.ownershipTypes.map(v => v.ownership_id) }));
+              } else {
+                setFilters(prev => ({ ...prev, ownershipTypes: [] }));
+              }
+            }} />
+            <Label htmlFor="ownership-all" className="text-sm">Select All</Label>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             {lookupData.ownershipTypes.map((ownership) => (
               <div key={ownership.ownership_id} className="flex items-center space-x-2">
                 <Checkbox
@@ -280,7 +336,17 @@ export default function FilterPage() {
         {/* States */}
         <div>
           <Label className="text-base font-medium">States</Label>
-          <div className="grid grid-cols-2 gap-2 mt-2 max-h-32 overflow-y-auto">
+          <div className="flex items-center gap-3 mt-2 mb-1">
+            <Checkbox id="states-all" checked={filters.states.length === lookupData.states.length && lookupData.states.length > 0} onCheckedChange={(checked) => {
+              if (checked) {
+                setFilters(prev => ({ ...prev, states: lookupData.states.map(v => v.id) }));
+              } else {
+                setFilters(prev => ({ ...prev, states: [] }));
+              }
+            }} />
+            <Label htmlFor="states-all" className="text-sm">Select All</Label>
+          </div>
+          <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
             {lookupData.states.map((state) => (
               <div key={state.id} className="flex items-center space-x-2">
                 <Checkbox
@@ -309,6 +375,8 @@ export default function FilterPage() {
             {applying ? "Applying..." : "Apply Filters"}
           </Button>
         </div>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Results */}
         {hasSearched && (

@@ -17,6 +17,7 @@ import { watchlistService } from "@/lib/services/watchlist";
 import { socketService, normalizeAuctionEnd } from "@/lib/socket";
 import { ImageCarousel } from "@/components/ui/image-carousel";
 import { Header } from "@/components/header";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
@@ -400,6 +401,23 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     <div className="min-h-screen">
       <Header />
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6 space-y-4">
+        <div className="mb-2">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/">Home</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/">Vehicles</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Vehicle #{vehicle?.vehicle_id || ''}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
       {!vehicle ? (
         <p className="text-muted-foreground">{error || "Loading..."}</p>
       ) : (
@@ -485,22 +503,17 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               ))}
             </div>
 
-            <div className="text-sm text-muted-foreground">
-              {owner} • {vehicle.transmissionType} • Fuel: {vehicle.fuel} • Odo: {vehicle.odometer}
+            <div className="text-[13px] font-semibold text-sky-600 flex flex-wrap items-center gap-2">
+              <span>{owner || "-"}</span>
+              <span>{(vehicle as any).region || "-"}</span>
+              <span>{vehicle.fuel || "-"}</span>
+              <span>{vehicle.odometer ? `${vehicle.odometer} km` : "-"}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-sm">
-              {(vehicle as any).rc_availability !== undefined && (
-                <div>RC Available: <span className="font-medium">{String((vehicle as any).rc_availability)}</span></div>
-              )}
-              {vehicle.regs_no && (
-                <div>Registration No: <span className="font-medium">{vehicle.regs_no}</span></div>
-              )}
-              {vehicle.repo_date && (
-                <div>Repo Date: <span className="font-medium">{vehicle.repo_date}</span></div>
-              )}
-              {vehicle.transmissionType && (
-                <div>Transmission: <span className="font-medium">{vehicle.transmissionType}</span></div>
-              )}
+              <div>RC Available: <span className="text-sky-600 font-medium">{((vehicle as any).rc_availability !== undefined ? String((vehicle as any).rc_availability) === 'true' ? 'Yes' : 'No' : '-') }</span></div>
+              <div>Registration No: <span className="text-sky-600 font-medium">{vehicle.regs_no || '-'}</span></div>
+              <div>Repo Date: <span className="text-sky-600 font-medium">{vehicle.repo_date ? new Date(vehicle.repo_date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/\//g, '-') : '-'}</span></div>
+              <div>Transmission: <span className="text-sky-600 font-medium">{vehicle.transmissionType || '-'}</span></div>
             </div>
             {/* Yard info */}
             <div className="text-sm space-y-0.5">
@@ -515,10 +528,15 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <div className="font-medium">{vehicle.manager_name}</div>
-              <div className="text-primary">{vehicle.manager_phone}</div>
-            </div>
+            {(vehicle.manager_name && vehicle.manager_phone) ? (
+              <div className="flex items-center justify-between text-sm border rounded-md px-2 py-1">
+                <div className="flex items-center gap-2 text-sky-600">
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/></svg>
+                  <div className="font-medium">{vehicle.manager_name}</div>
+                </div>
+                <div className="text-sky-600">{vehicle.manager_phone}</div>
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-2 mt-1">
               <Dialog open={placeBidOpen} onOpenChange={(open) => {
                 setPlaceBidOpen(open);
@@ -724,7 +742,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                         )}
                       </TableCell>
                       <TableCell className="font-medium">{item.bid_amt}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{item.created_dttm}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{new Date(item.created_dttm as any).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).replace(/\//g, '-').replace(',', '')}</TableCell>
                     </TableRow>
                   ))}
                   {bidHistory.length === 0 && !bidHistoryLoading && (

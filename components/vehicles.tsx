@@ -402,26 +402,42 @@ export function VehicleCard({ v }: { v: VehicleApi }) {
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-4 gap-2 text-[10px] text-muted-foreground">
+          <div className="grid grid-cols-4 gap-2 -mt-2 text-[10px] text-muted-foreground">
             {["Days", "Hours", "Minutes", "Seconds"].map((l) => (
               <div key={l} className="text-center">
                 {l}
               </div>
             ))}
           </div>
-          <div className="text-sm text-muted-foreground">
-            {owner} • {vehicleData.transmissionType} • Fuel:{" "}
-            {vehicleData.fuel} • Odo: {vehicleData.odometer}
-          </div>
-          <div className="flex items-center justify-between text-sm py-2">
-            <div className="font-medium">{vehicleData.manager_name || "N/A"}</div>
-            <div className="flex items-center gap-1 text-primary">
-              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-              </svg>
-              {vehicleData.manager_phone || "N/A"}
+          <div className="grid grid-cols-4">
+            <div className="flex flex-col items-center text-center">
+              <div className="text-[10px] text-muted-foreground">Owner</div>
+              <div className="text-[13px] font-semibold text-sky-600">{owner || '-'}</div>
+            </div>
+            <div className="flex flex-col items-center text-center">
+              <div className="text-[10px] text-muted-foreground">Region</div>
+              <div className="text-[13px] font-semibold text-sky-600">{(vehicleData)?.regs_no?.slice(0, 2) || '-'}</div>
+            </div>
+            <div className="flex flex-col items-center text-center">
+              <div className="text-[10px] text-muted-foreground">Fuel</div>
+              <div className="text-[13px] font-semibold text-sky-600">{vehicleData.fuel || '-'}</div>
+            </div>
+            <div className="flex flex-col items-center text-center">
+              <div className="text-[10px] text-muted-foreground">Odometer</div>
+              <div className="text-[13px] font-semibold text-sky-600">{vehicleData.odometer ? `${vehicleData.odometer} km` : '-'}</div>
             </div>
           </div>
+          {(vehicleData.manager_name && vehicleData.manager_phone) ? (
+            <div className="flex items-center justify-between text-sm py-2 border rounded-md px-2">
+              <div className="flex items-center gap-2 text-sky-600">
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                </svg>
+                <div className="font-medium">{vehicleData.manager_name}</div>
+              </div>
+              <div className="text-sky-600">{vehicleData.manager_phone}</div>
+            </div>
+          ) : null}
           <div className="mt-auto">
             <Dialog
               open={placeBidOpen}
